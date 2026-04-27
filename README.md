@@ -32,50 +32,37 @@ Standard task trackers often treat tickets as isolated units. By embedding ticke
 ## Graph topology
 ```mermaid
 graph TD
+
     V[Vision<br/> Become leading AI-powered project co-pilot]
 
     S1[Strategy<br/> Focus on solo builders]
     S2[Strategy<br/> Leverage AI for task generation]
-    S3[Strategy<br/> Graph-based execution model]
 
     G1[Goal<br/> 10k beta users]
     G2[Goal<br/> High activation rate]
     G3[Goal<br/> Validate graph usability]
 
     T1[Task<br/> Launch on Product Hunt]
-    T2[Task<br/> Build in public on X]
-    T3[Task<br/> Improve onboarding flow]
     T4[Task<br/> Add task breakdown feature]
-    T5[Task<br/> Collect user feedback]
 
     %% Subtickets (execution level)
-    ST2[Task<br/> Write Product Hunt copy]
-    ST3[Task<br/> Engage community]
-    ST5[Task<br/> Implement AI generation]
     ST8[Task<br/> Implement subtask generation]
     ST9[Task<br/> Refine output quality]
 
     %% Vision to Strategy
     V -->|defines direction| S1
     V -->|defines direction| S2
-    V -->|defines direction| S3
 
     %% Strategy to Goals
     S1 -->|tracked_by| G1
     S2 -->|tracked_by| G2
-    S3 -->|tracked_by| G3
+    S2 -->|tracked_by| G3
 
     %% Goals to Tactics
     G1 -->|implemented by| T1
-    G1 -->|implemented by| T2
-    G2 -->|implemented by| T3
     G2 -->|implemented by| T4
-    G3 -->|implemented by| T5
 
     %% SUBTICKET edges (explicit)
-    T1 -->|SUBTICKET| ST2
-    T2 -->|SUBTICKET| ST3
-    T3 -->|SUBTICKET| ST5u
     T4 -->|SUBTICKET| ST8
     T4 -->|SUBTICKET| ST9
 
