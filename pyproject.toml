@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "florque-workgraph"
+version = "0.1.0"
+description = "Graph database package for Florque"
+authors = [
+    { name = "Florque" }
+]
+dependencies = [
+    "pymgclient>=1.5.2",
+    "uuid-utils>=0.14.0",
+]
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+]
+
+[tool.setuptools]
+packages = ["graph_db"]
+
+[tool.setuptools.package-dir]
+"graph_db" = "."
