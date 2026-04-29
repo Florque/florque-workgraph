@@ -1,6 +1,6 @@
 import pytest
 
-from graph_db.repositories import (
+from florque_workgraph.repositories import (
     CapabilityRepository,
     MembershipRepository,
     ProjectRepository,
@@ -10,7 +10,7 @@ from graph_db.repositories import (
     UserRepository,
     WorkspaceRepository,
 )
-from graph_db.session import GraphManager
+from florque_workgraph.session import GraphManager
 
 
 def _ids(rows):
@@ -18,7 +18,7 @@ def _ids(rows):
 
 
 @pytest.fixture(scope="session")
-def graph_db():
+def florque_workgraph():
     # To run a test instance of Memgraph:
     # docker run --name memgraph-test -p 7666:7687 --rm memgraph/memgraph
     host = "localhost"
@@ -34,21 +34,21 @@ def graph_db():
 
 
 @pytest.fixture(autouse=True)
-def clean_graph(graph_db):
-    graph_db.execute_write("MATCH (n) DETACH DELETE n")
+def clean_graph(florque_workgraph):
+    florque_workgraph.execute_write("MATCH (n) DETACH DELETE n")
 
 
 @pytest.fixture
-def repos(graph_db):
+def repos(florque_workgraph):
     return {
-        "workspace": WorkspaceRepository(graph_db),
-        "project": lambda workspace_id: ProjectRepository(graph_db, workspace_id),
-        "ticket": lambda workspace_id: TicketRepository(graph_db, workspace_id),
-        "timebox": lambda workspace_id: TimeboxRepository(graph_db, workspace_id),
-        "user": UserRepository(graph_db),
-        "role": lambda workspace_id: RoleRepository(graph_db, workspace_id),
-        "capability": CapabilityRepository(graph_db),
-        "membership": MembershipRepository(graph_db),
+        "workspace": WorkspaceRepository(florque_workgraph),
+        "project": lambda workspace_id: ProjectRepository(florque_workgraph, workspace_id),
+        "ticket": lambda workspace_id: TicketRepository(florque_workgraph, workspace_id),
+        "timebox": lambda workspace_id: TimeboxRepository(florque_workgraph, workspace_id),
+        "user": UserRepository(florque_workgraph),
+        "role": lambda workspace_id: RoleRepository(florque_workgraph, workspace_id),
+        "capability": CapabilityRepository(florque_workgraph),
+        "membership": MembershipRepository(florque_workgraph),
     }
 
 
