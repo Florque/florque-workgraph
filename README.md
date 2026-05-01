@@ -11,6 +11,8 @@ Modern work often suffers from a disconnect between high-level objectives and da
 3. **Goal**: Specific, measurable milestones that indicate progress along a strategy.
 4. **Tactics (Tickets/Tasks)**: The actual atomic units of work. The granular steps executed to achieve the goals.
 
+<img width="1408" height="752" alt="vsgt_illustration" src="https://github.com/user-attachments/assets/156cdeb4-18eb-4846-b621-187cd938c154" />
+
 By strictly linking tactics all the way up to a vision, every piece of work inherently carries its justification and context.
 
 ## Empowering AI Agents
