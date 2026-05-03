@@ -88,6 +88,9 @@ class VisionRepository:
 
     def delete(self, vision_id: str) -> None:
         """Delete a Vision node."""
+        strategies = self.get_strategies(vision_id)
+        if strategies:
+            raise ValueError(f"Cannot delete vision {vision_id} because it has associated strategies pursuing it.")
         self.db.execute_write(DELETE_VISION, self._p(id=vision_id))
 
     def get_strategies(self, vision_id: str) -> list[Any]:

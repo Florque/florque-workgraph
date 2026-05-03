@@ -56,6 +56,9 @@ class StrategyRepository:
 
     def delete(self, strategy_id: str) -> None:
         """Delete a Strategy node."""
+        goals = self.get_goals(strategy_id)
+        if goals:
+            raise ValueError(f"Cannot delete strategy {strategy_id} because it has associated goals tracked via it.")
         self.db.execute_write(DELETE_STRATEGY, self._p(id=strategy_id))
 
     # Relationships

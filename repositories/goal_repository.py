@@ -52,6 +52,9 @@ class GoalRepository:
 
     def delete(self, goal_id: str) -> None:
         """Delete a Goal node."""
+        tickets = self.get_tickets(goal_id)
+        if tickets:
+            raise ValueError(f"Cannot delete goal {goal_id} because it has associated tickets executing it.")
         self.db.execute_write(DELETE_GOAL, self._p(id=goal_id))
 
     def get_strategy(self, goal_id: str) -> list[Any]:
