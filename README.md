@@ -191,6 +191,6 @@ graph TD
     %% Apply styles
     class V vision;
     class S1,S2,S3 strategy;
-    class G1,G2,G3, G4, G5 goal;
+    class G1,G2,G3 goal;
     class T1,T2,T3,T4,T5,ST1,ST2,ST3,ST4,ST5,ST6,ST7,ST8,ST9 tactic;
 ```
