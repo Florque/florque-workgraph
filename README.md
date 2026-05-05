@@ -28,50 +28,6 @@ flowchart TD
     G2["✅ Goal \nVerifiable done-state"]
     G3["✅ Goal \nVerifiable done-state"]
 
-    G1 --> T1
-    G2 --> T2
-    G3 --> T3
-    G4 --> T4
-    G5 --> T5
-
-    T1["🔧 Implementation"]
-    T2["🔧 Implementation"]
-    T3["🔧 Implementation"]
-    T4["🔧 Implementation"]
-    T5["🔧 Implementation"]
-
-    %% Styling
-    classDef vision   fill:#EEEDFE,stroke:#534AB7,color:#3C3489
-    classDef strategy fill:#E1F5EE,stroke:#0F6E56,color:#085041
-    classDef goal     fill:#FAEEDA,stroke:#BA7517,color:#633806
-    classDef task     fill:#F1EFE8,stroke:#5F5E5A,color:#444441
-    classDef note     fill:#ffffff,stroke:#D3D1C7,color:#5F5E5A,font-size:12px
-
-    class V vision
-    class S strategy
-    class G1,G2,G3 goal
-    class T1,T2,T3,T4,T5 task
-    class VNOTE,SNOTE,GNOTE,TNOTE note
-```
-
-## Personal Growth Example
-Here is the personal growth vision example.
-```mermaid
-flowchart TD
-    V["🔭 Vision\n🏅 Ironman\nComplete a full Ironman triathlon:\n3.8km swim · 180km bike · 42km run\nFinish under the 17h cutoff."]
-
-    V --> S
-
-    S["⚡ Strategy\n📅 12-month base-build plan\nFirst 6 months: aerobic base,\nno speed work, focus on consistency.\nFinal 6 months: race-specific blocks\nand one 70.3 tune-up event."]
-
-    S --> G1 & G2 & G3 & G4 & G5
-
-    G1["✅ Goal \nSwim 3.8km open water\nunder 1h 30m"]
-    G2["✅ Goal \nRide 180km\nunder 7 hours"]
-    G3["✅ Goal \nRun half-marathon\noff the bike without walking"]
-    G4["✅ Goal \nTrain 10h+/week\nfor 8 consecutive weeks"]
-    G5["✅ Goal \nFinish a 70.3\nas race rehearsal"]
-
     G1 --> T1 & T2
     G2 --> T3
     G3 --> T4 & T5
@@ -92,6 +48,50 @@ flowchart TD
     class V vision
     class S strategy
     class G1,G2,G3 goal
+    class T1,T2,T3,T4,T5 task
+    class VNOTE,SNOTE,GNOTE,TNOTE note
+```
+
+## Personal Growth Example
+Here is the personal growth vision example.
+```mermaid
+flowchart TD
+    V["🔭 Vision\n🏅 Ironman\nComplete a full Ironman triathlon:\n· 3.8km swim · 180km bike · 42km run\nFinish under the 17h cutoff."]
+
+    V --> S
+
+    S["⚡ Strategy\n📅 12-month base-build plan\nFirst 6 months: aerobic base, no speed work, focus on consistency.\nFinal 6 months: race-specific blocks\nand one 70.3 tune-up event."]
+
+    S --> G1 & G2 & G3 & G4 & G5
+
+    G1["✅ Goal \nSwim 3.8km open water\nunder 1h 30m"]
+    G2["✅ Goal \nRide 180km\nunder 7 hours"]
+    G3["✅ Goal \nRun half-marathon\noff the bike without walking"]
+    G4["✅ Goal \nTrain 10h+/week\nfor 8 consecutive weeks"]
+    G5["✅ Goal \nFinish a 70.3\nas race rehearsal"]
+
+    G1 --> T1
+    G2 --> T2
+    G3 --> T3
+    G4 --> T4
+    G5 --> T5
+
+    T1["🔧 Ad-Hoc training"]
+    T2["🔧 Ad-Hoc training"]
+    T3["🔧 Ad-Hoc training"]
+    T4["🔧 Ad-Hoc training"]
+    T5["🔧 Ad-Hoc training"]
+
+    %% Styling
+    classDef vision   fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef strategy fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    classDef goal     fill:#FAEEDA,stroke:#BA7517,color:#633806
+    classDef task     fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+    classDef note     fill:#ffffff,stroke:#D3D1C7,color:#5F5E5A,font-size:12px
+
+    class V vision
+    class S strategy
+    class G1,G2,G3,G4,G5 goal
     class T1,T2,T3,T4,T5 task
     class VNOTE,SNOTE,GNOTE,TNOTE note
 ```
@@ -191,6 +191,6 @@ graph TD
     %% Apply styles
     class V vision;
     class S1,S2,S3 strategy;
-    class G1,G2,G3 goal;
+    class G1,G2,G3, G4, G5 goal;
     class T1,T2,T3,T4,T5,ST1,ST2,ST3,ST4,ST5,ST6,ST7,ST8,ST9 tactic;
 ```
