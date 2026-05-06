@@ -32,6 +32,7 @@ from ..queries import (
     CREATE_EXECUTES,
     DELETE_EXECUTES,
     GET_TICKET_GOALS,
+    GET_ANCESTORS_WITH_GOALS,
 )
 
 
@@ -225,3 +226,7 @@ class TicketRepository:
         """Get goals executed by this ticket."""
 
         return self.db.execute(GET_TICKET_GOALS, self._p(ticket_id=ticket_id))
+
+    def get_ancestors_with_goals(self, ticket_id: str) -> list[Any]:
+        """Get ancestors of a ticket with their goals, ordered by distance."""
+        return self.db.execute(GET_ANCESTORS_WITH_GOALS, self._p(ticket_id=ticket_id))
