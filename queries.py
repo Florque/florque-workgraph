@@ -702,6 +702,14 @@ MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})-[:EXECUTES]->(g:Goal {wo
 RETURN g
 """
 
+GET_ANCESTORS_WITH_GOALS = """
+MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})<-[:SUBTASK*0..]-(ancestor:Ticket {workspace_id: $workspace_id})
+WHERE ancestor.project_id = t.project_id OR (ancestor.project_id IS NULL AND t.project_id IS NULL)
+OPTIONAL MATCH (ancestor)-[:EXECUTES]->(g:Goal {workspace_id: $workspace_id})
+RETURN ancestor, g, length(path) AS distance
+ORDER BY distance ASC
+"""
+
 GET_GOAL_TRACKED_BY_STRATEGY = """
 MATCH (s:Strategy {workspace_id: $workspace_id})-[:TRACKS_VIA]->(g:Goal {id: $id, workspace_id: $workspace_id})
 RETURN s
