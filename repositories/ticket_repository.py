@@ -33,6 +33,7 @@ from ..queries import (
     DELETE_EXECUTES,
     GET_TICKET_GOALS,
     GET_ANCESTORS_WITH_GOALS,
+    SET_ARCHIVED_STATUS,
 )
 
 
@@ -58,6 +59,7 @@ class TicketRepository:
         """Create a Ticket node. ticket_data must contain: id, title, description, status, project_id.
         workspace_id is always set from the repository context."""
         params = {**ticket_data, "workspace_id": self.workspace_id}
+        params.setdefault("archived", None)  # Ensure archived is always provided
         rows = self.db.execute_write(CREATE_TICKET, params)
 
         # If a project_id was provided, also ensure the IN_PROJECT relationship exists.
@@ -74,7 +76,9 @@ class TicketRepository:
         
         if parent_ticket_id:
             try:
-                self.db.execute_write(CREATE_SUBTASK, {"parent_id": parent_ticket_id, "child_id": ticket_id, "workspace_id": self.workspace_id})
+                # Ensure 'archived' is provided for the SUBTASK relationship
+                subtask_params = {"parent_id": parent_ticket_id, "child_id": ticket_id, "workspace_id": self.workspace_id, "archived": None}
+                self.db.execute_write(CREATE_SUBTASK, subtask_params)
             except Exception:
                 pass
 
@@ -93,6 +97,7 @@ class TicketRepository:
             "description": updates.get("description", None),
             "status": updates.get("status", None),
             "project_id": updates.get("project_id", None),
+            "archived": updates.get("archived", None),
         }
         rows = self.db.execute_write(UPDATE_TICKET, params)
 
@@ -114,6 +119,12 @@ class TicketRepository:
 
         return rows
 
+
+    def set_archived_status(self, ticket_id: str, archived: bool, include_subtickets: bool = False) -> list[Any]:
+        """Set the archived status of a ticket and its incoming relationship, optionally cascading to subtickets."""
+        params = self._p(ticket_id=ticket_id, archived=archived, include_subtickets=include_subtickets)
+        return self.db.execute_write(SET_ARCHIVED_STATUS, params)
+
     def get(self, ticket_id: str) -> list[Any]:
         """Return a single Ticket node by id, scoped to this workspace."""
         return self.db.execute(GET_TICKET, self._p(id=ticket_id))
@@ -129,7 +140,7 @@ class TicketRepository:
     # ── Hierarchy ──────────────────────────────────────────────────────────────
 
     def add_subtask(self, parent_id: str, child_id: str) -> None:
-        self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_id, child_id=child_id))
+        self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_id, child_id=child_id, archived=None))
 
     def remove_subtask(self, parent_id: str, child_id: str) -> None:
         self.db.execute_write(DELETE_SUBTASK, self._p(parent_id=parent_id, child_id=child_id))
@@ -216,7 +227,7 @@ class TicketRepository:
 
     def add_goal(self, ticket_id: str, goal_id: str) -> None:
         """Ticket EXECUTES Goal."""
-        self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id))
+        self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
 
     def remove_goal(self, ticket_id: str, goal_id: str) -> None:
         """Remove Ticket EXECUTES Goal."""

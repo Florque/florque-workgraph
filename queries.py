@@ -37,6 +37,7 @@ CREATE (t:Ticket {
     status: $status,
     project_id: $project_id,
     workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
 })
@@ -155,7 +156,8 @@ MERGE (v)-[:IN_PROJECT]->(p)
 CREATE_SUBTASK = """
 MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})
 MATCH (child:Ticket {id: $child_id, workspace_id: $workspace_id})
-MERGE (parent)-[:SUBTASK]->(child)
+MERGE (parent)-[r:SUBTASK]->(child)
+SET r.archived = coalesce($archived, false)
 """
 
 CREATE_ASSIGNED = """
@@ -203,7 +205,8 @@ MERGE (s)-[:TRACKS_VIA]->(g)
 CREATE_EXECUTES = """
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
 MATCH (g:Goal {id: $goal_id, workspace_id: $workspace_id})
-MERGE (t)-[:EXECUTES]->(g)
+MERGE (t)-[r:EXECUTES]->(g)
+SET r.archived = coalesce($archived, false)
 """
 
 # ── Membership ─────────────────────────────────────────────────────────────────
@@ -495,6 +498,9 @@ FOREACH (_ IN CASE WHEN $status IS NOT NULL THEN [1] ELSE [] END |
 FOREACH (_ IN CASE WHEN $project_id IS NOT NULL THEN [1] ELSE [] END |
     SET t.project_id = $project_id
 )
+FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END |
+    SET t.archived = $archived
+)
 SET t.updated_at = datetime()
 RETURN t
 """
@@ -718,4 +724,31 @@ RETURN s
 GET_STRATEGY_PURSUES_VISION = """
 MATCH (s:Strategy {id: $id, workspace_id: $workspace_id})-[:PURSUES]->(v:Vision {workspace_id: $workspace_id})
 RETURN v
+"""
+
+# ── Archiving ──────────────────────────────────────────────────────────────────
+
+SET_ARCHIVED_STATUS = """
+// Main ticket update
+MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
+SET t.archived = $archived, t.updated_at = datetime()
+
+// Update incoming edge from parent ticket or goal
+OPTIONAL MATCH (parent)-[r:SUBTASK|EXECUTES]->(t)
+WHERE parent:Ticket OR parent:Goal
+SET r.archived = $archived
+
+// Optionally cascade to all subtickets and their relationships
+CALL apoc.do.when($include_subtickets,
+  '
+  MATCH (t)-[:SUBTASK*1..]->(subticket:Ticket)
+  SET subticket.archived = $archived, subticket.updated_at = datetime()
+  WITH t
+  MATCH (t)-[r:SUBTASK*1..]->(subticket:Ticket)
+  SET r.archived = $archived
+  ',
+  '',
+  {t: t, archived: $archived}
+) YIELD value
+RETURN t
 """
