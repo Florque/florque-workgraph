@@ -59,7 +59,8 @@ class TicketRepository:
         """Create a Ticket node. ticket_data must contain: id, title, description, status, project_id.
         workspace_id is always set from the repository context."""
         params = {**ticket_data, "workspace_id": self.workspace_id}
-        params.setdefault("archived", None)  # Ensure archived is always provided
+        # Always provide a value for the optional 'archived' property on the node
+        params.setdefault("archived", None)
         rows = self.db.execute_write(CREATE_TICKET, params)
 
         # If a project_id was provided, also ensure the IN_PROJECT relationship exists.
@@ -76,8 +77,8 @@ class TicketRepository:
         
         if parent_ticket_id:
             try:
-                # Ensure 'archived' is provided for the SUBTASK relationship
-                subtask_params = {"parent_id": parent_ticket_id, "child_id": ticket_id, "workspace_id": self.workspace_id, "archived": None}
+                # Always provide a value for the optional 'archived' property on the relationship
+                subtask_params = self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None)
                 self.db.execute_write(CREATE_SUBTASK, subtask_params)
             except Exception:
                 pass
