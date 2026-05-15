@@ -729,7 +729,7 @@ RETURN v
 
 # ── Archiving ──────────────────────────────────────────────────────────────────
 
-SET_ARCHIVED_STATUS = """
+SET_TICKET_ARCHIVED_STATUS = """
 // Main ticket update
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
 SET t.archived = $archived, t.updated_at = datetime()
@@ -739,17 +739,16 @@ OPTIONAL MATCH (parent)-[r:SUBTASK|EXECUTES]->(t)
 WHERE parent:Ticket OR parent:Goal
 SET r.archived = $archived
 
-// Optionally cascade to all subtickets and their relationships
-CALL apoc.do.when($include_subtickets,
-  '
-  MATCH (t)-[:SUBTASK*1..]->(subticket:Ticket)
-  SET subticket.archived = $archived, subticket.updated_at = datetime()
-  WITH t
-  MATCH (t)-[r:SUBTASK*1..]->(subticket:Ticket)
-  SET r.archived = $archived
-  ',
-  '',
-  {t: t, archived: $archived}
-) YIELD value
 RETURN t
+"""
+
+SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED = """
+// Cascade the archived status to all downstream subtickets and their relationships
+MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK*1..]->(subticket:Ticket)
+SET subticket.archived = $archived, subticket.updated_at = datetime()
+
+WITH t, $archived AS archived_status
+MATCH (t)-[r:SUBTASK*1..]->(subticket:Ticket)
+WHERE (r.archived IS NULL OR r.archived <> archived_status)
+SET r.archived = archived_status
 """

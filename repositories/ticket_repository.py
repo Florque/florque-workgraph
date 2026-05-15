@@ -33,7 +33,8 @@ from ..queries import (
     DELETE_EXECUTES,
     GET_TICKET_GOALS,
     GET_ANCESTORS_WITH_GOALS,
-    SET_ARCHIVED_STATUS,
+    SET_TICKET_ARCHIVED_STATUS,
+    SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
 )
 
 
@@ -123,8 +124,16 @@ class TicketRepository:
 
     def set_archived_status(self, ticket_id: str, archived: bool, include_subtickets: bool = False) -> list[Any]:
         """Set the archived status of a ticket and its incoming relationship, optionally cascading to subtickets."""
-        params = self._p(ticket_id=ticket_id, archived=archived, include_subtickets=include_subtickets)
-        return self.db.execute_write(SET_ARCHIVED_STATUS, params)
+        params = self._p(ticket_id=ticket_id, archived=archived)
+        
+        # Always archive the primary ticket first
+        result = self.db.execute_write(SET_TICKET_ARCHIVED_STATUS, params)
+        
+        # If cascading is requested, run the second query
+        if include_subtickets:
+            self.db.execute_write(SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED, params)
+            
+        return result
 
     def get(self, ticket_id: str) -> list[Any]:
         """Return a single Ticket node by id, scoped to this workspace."""
