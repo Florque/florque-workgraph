@@ -84,6 +84,7 @@ class ProjectRepository:
         """Remove the IN_PROJECT edge from a ticket to this project."""
         self.db.execute_write(DELETE_IN_PROJECT, self._p(ticket_id=ticket_id, project_id=project_id))
 
-    def get_tickets(self, project_id: str) -> list[Any]:
+    def get_tickets(self, project_id: str, include_archived: bool = False) -> list[Any]:
         """Return all Ticket nodes that belong to this project, within this workspace."""
-        return self.db.execute(GET_TICKETS_FOR_PROJECT, self._p(project_id=project_id))
+        params = self._p(project_id=project_id, include_archived=include_archived)
+        return self.db.execute(GET_TICKETS_FOR_PROJECT, params)

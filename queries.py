@@ -446,6 +446,7 @@ RETURN v
 
 GET_TICKETS_FOR_PROJECT = """
 MATCH (t:Ticket {workspace_id: $workspace_id})-[:IN_PROJECT]->(p:Project {id: $project_id, workspace_id: $workspace_id})
+WHERE $include_archived OR (t.archived IS NULL OR t.archived = false)
 RETURN t, null AS parent_id
 """
 
