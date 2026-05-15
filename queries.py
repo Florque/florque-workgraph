@@ -730,25 +730,39 @@ RETURN v
 # ── Archiving ──────────────────────────────────────────────────────────────────
 
 SET_TICKET_ARCHIVED_STATUS = """
-// Main ticket update
+// Find the ticket and its optional incoming relationship first
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
-SET t.archived = $archived, t.updated_at = datetime()
-
-// Update incoming edge from parent ticket or goal
 OPTIONAL MATCH (parent)-[r:SUBTASK|EXECUTES]->(t)
 WHERE parent:Ticket OR parent:Goal
-SET r.archived = $archived
+
+// Now, perform all updates
+SET t.archived = $archived, t.updated_at = datetime()
+
+// Conditionally update the relationship if it exists
+FOREACH (rel IN CASE WHEN r IS NOT NULL THEN [r] ELSE [] END |
+    SET rel.archived = $archived
+)
 
 RETURN t
 """
 
 SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED = """
-// Cascade the archived status to all downstream subtickets and their relationships
-MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK*1..]->(subticket:Ticket)
-SET subticket.archived = $archived, subticket.updated_at = datetime()
+// Find all paths to descendant subtickets
+MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK*1..]->(subticket:Ticket)
 
-WITH t, $archived AS archived_status
-MATCH (t)-[r:SUBTASK*1..]->(subticket:Ticket)
-WHERE (r.archived IS NULL OR r.archived <> archived_status)
-SET r.archived = archived_status
+// Collect unique nodes and relationships from all found paths
+WITH COLLECT(DISTINCT subticket) AS all_subtickets, COLLECT(path) AS all_paths, $archived AS archived_status
+
+// Flatten the list of relationship lists and get unique relationships
+UNWIND all_paths AS p
+UNWIND relationships(p) AS r
+WITH all_subtickets, COLLECT(DISTINCT r) AS all_rels, archived_status
+
+// Perform updates
+FOREACH(st IN all_subtickets |
+    SET st.archived = archived_status, st.updated_at = datetime()
+)
+FOREACH(rel IN all_rels |
+    SET rel.archived = archived_status
+)
 """
