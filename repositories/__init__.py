@@ -9,6 +9,7 @@ from .membership_repository import MembershipRepository
 from .vision_repository import VisionRepository
 from .strategy_repository import StrategyRepository
 from .goal_repository import GoalRepository
+from .label_repository import LabelRepository
 
 __all__ = [
     "TicketRepository",
@@ -22,4 +23,5 @@ __all__ = [
     "VisionRepository",
     "StrategyRepository",
     "GoalRepository",
+    "LabelRepository",
 ]

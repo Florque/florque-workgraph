@@ -690,6 +690,7 @@ CONSTRAINTS = [
     "CREATE CONSTRAINT ON (v:Vision) ASSERT v.id IS UNIQUE",
     "CREATE CONSTRAINT ON (s:Strategy) ASSERT s.id IS UNIQUE",
     "CREATE CONSTRAINT ON (g:Goal) ASSERT g.id IS UNIQUE",
+    "CREATE CONSTRAINT ON (l:Label) ASSERT l.id IS UNIQUE",
 ]
 
 # ── Hierarchy / VSGT Retrieval ────────────────────────────────────────────────
@@ -766,3 +767,52 @@ FOREACH(rel IN all_rels |
     SET rel.archived = archived_status
 )
 """
+
+# ── Labels ─────────────────────────────────────────────────────────────────────
+
+CREATE_LABEL = """
+CREATE (l:Label {
+    id: $id,
+    title: $title,
+    description: $description,
+    color: $color,
+    workspace_id: $workspace_id,
+    created_at: datetime(),
+    updated_at: datetime()
+})
+RETURN l
+"""
+
+GET_LABEL = "MATCH (l:Label {id: $id, workspace_id: $workspace_id}) RETURN l"
+GET_ALL_LABELS = "MATCH (l:Label {workspace_id: $workspace_id}) RETURN l"
+
+UPDATE_LABEL = """
+MATCH (l:Label {id: $id, workspace_id: $workspace_id})
+FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET l.title = $title)
+FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET l.description = $description)
+FOREACH (_ IN CASE WHEN $color IS NOT NULL THEN [1] ELSE [] END | SET l.color = $color)
+SET l.updated_at = datetime()
+RETURN l
+"""
+
+DELETE_LABEL = "MATCH (l:Label {id: $id, workspace_id: $workspace_id}) DETACH DELETE l"
+
+CREATE_LABELED_RELATIONSHIP = """
+MATCH (l:Label {id: $label_id, workspace_id: $workspace_id})
+MATCH (n)
+WHERE (n:Ticket OR n:Goal OR n:Strategy) AND n.id = $node_id AND n.workspace_id = $workspace_id
+MERGE (n)-[:LABELED]->(l)
+"""
+
+DELETE_LABELED_RELATIONSHIP = """
+MATCH (n)-[r:LABELED]->(l:Label {id: $label_id, workspace_id: $workspace_id})
+WHERE (n:Ticket OR n:Goal OR n:Strategy) AND n.id = $node_id AND n.workspace_id = $workspace_id
+DELETE r
+"""
+
+GET_LABELS_FOR_NODE = """
+MATCH (n)-[:LABELED]->(l:Label {workspace_id: $workspace_id})
+WHERE (n:Ticket OR n:Goal OR n:Strategy) AND n.id = $node_id AND n.workspace_id = $workspace_id
+RETURN l
+"""
+
