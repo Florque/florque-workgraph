@@ -92,6 +92,20 @@ CREATE (s:Strategy {
 RETURN s
 """
 
+CREATE_STRATEGY_PURSUES_VISION = """
+MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})
+CREATE (s:Strategy {
+    id: $id,
+    title: $title,
+    description: $description,
+    workspace_id: $workspace_id,
+    created_at: datetime(),
+    updated_at: datetime()
+})
+CREATE (s)-[:PURSUES]->(v)
+RETURN s
+"""
+
 CREATE_GOAL = """
 CREATE (g:Goal {
     id: $id,

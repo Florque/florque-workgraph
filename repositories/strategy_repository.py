@@ -1,12 +1,12 @@
 from typing import Any
 from ..session import GraphManager
 from ..queries import (
-    CREATE_STRATEGY,
+    CREATE_STRATEGY_PURSUES_VISION,
     UPDATE_STRATEGY,
     DELETE_STRATEGY,
     GET_STRATEGY,
     GET_ALL_STRATEGIES,
-    CREATE_PURSUES,
+
     DELETE_PURSUES,
     GET_STRATEGY_VISION,
     CREATE_TRACKS_VIA,
@@ -28,10 +28,10 @@ class StrategyRepository:
 
         return {"workspace_id": self.workspace_id, **kwargs}
 
-    def create(self, strategy_data: dict) -> list[Any]:
-        """Create a Strategy node."""
-
-        return self.db.execute_write(CREATE_STRATEGY, {**strategy_data, "workspace_id": self.workspace_id})
+    def create(self, strategy_data: dict, vision_id: str) -> list[Any]:
+        """Create a Strategy node and connect it to a Vision."""
+        params = {**strategy_data, "vision_id": vision_id, "workspace_id": self.workspace_id}
+        return self.db.execute_write(CREATE_STRATEGY_PURSUES_VISION, params)
 
     def update(self, strategy_id: str, updates: dict) -> list[Any]:
         """Update a Strategy node."""
@@ -62,9 +62,6 @@ class StrategyRepository:
         self.db.execute_write(DELETE_STRATEGY, self._p(id=strategy_id))
 
     # Relationships
-    def add_vision(self, strategy_id: str, vision_id: str) -> None:
-        """Strategy PURSUES Vision."""
-        self.db.execute_write(CREATE_PURSUES, self._p(strategy_id=strategy_id, vision_id=vision_id))
 
     def remove_vision(self, strategy_id: str, vision_id: str) -> None:
         """Remove Strategy PURSUES Vision."""
