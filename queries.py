@@ -791,6 +791,7 @@ CREATE (l:Label {
     description: $description,
     color: $color,
     workspace_id: $workspace_id,
+    project_id: $project_id,
     created_at: datetime(),
     updated_at: datetime()
 })
@@ -798,7 +799,7 @@ RETURN l
 """
 
 GET_LABEL = "MATCH (l:Label {id: $id, workspace_id: $workspace_id}) RETURN l"
-GET_ALL_LABELS = "MATCH (l:Label {workspace_id: $workspace_id}) RETURN l"
+GET_ALL_LABELS = "MATCH (l:Label {workspace_id: $workspace_id, project_id: $project_id}) RETURN l"
 
 UPDATE_LABEL = """
 MATCH (l:Label {id: $id, workspace_id: $workspace_id})
@@ -809,7 +810,7 @@ SET l.updated_at = datetime()
 RETURN l
 """
 
-DELETE_LABEL = "MATCH (l:Label {id: $id, workspace_id: $workspace_id}) DETACH DELETE l"
+DELETE_LABEL = "MATCH (l:Label {id: $id, workspace_id: $workspace_id, project_id: $project_id}) DETACH DELETE l"
 
 CREATE_LABELED_RELATIONSHIP = """
 MATCH (l:Label {id: $label_id, workspace_id: $workspace_id})

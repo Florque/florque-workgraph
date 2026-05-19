@@ -37,18 +37,18 @@ class LabelRepository:
         """Return a single Label node by id."""
         return self.db.execute(GET_LABEL, self._p(id=label_id))
 
-    def get_all(self) -> list[Any]:
-        """Return all Label nodes in this workspace."""
-        return self.db.execute(GET_ALL_LABELS, self._p())
+    def get_all(self, project_id: str) -> list[Any]:
+        """Return all Label nodes in this project."""
+        return self.db.execute(GET_ALL_LABELS, self._p(project_id=project_id))
 
     def update(self, label_id: str, updates: dict) -> list[Any]:
         """Update fields on a Label node."""
         params = self._p(id=label_id, **updates)
         return self.db.execute_write(UPDATE_LABEL, params)
 
-    def delete(self, label_id: str) -> None:
+    def delete(self, label_id: str, project_id: str) -> None:
         """Detach-delete a Label node."""
-        self.db.execute_write(DELETE_LABEL, self._p(id=label_id))
+        self.db.execute_write(DELETE_LABEL, self._p(id=label_id, project_id=project_id))
 
     # ── Edge Management ────────────────────────────────────────────────────────
 
