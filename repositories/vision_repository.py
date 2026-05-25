@@ -10,6 +10,7 @@ from ..queries import (
     CREATE_VISION_IN_PROJECT,
     DELETE_IN_PROJECT_BY_VISION,
     GET_PROJECT_VISIONS,
+    SET_VISION_ARCHIVED_STATUS,
 )
 
 class VisionRepository:
@@ -32,6 +33,10 @@ class VisionRepository:
         project_id = vision_data.get("project_id")
         if not project_id:
             raise ValueError("project_id is required to create a Vision.")
+            
+        # Ensure 'archived' parameter is present, defaulting to False
+        if "archived" not in vision_data:
+            vision_data["archived"] = False
             
         rows = self.db.execute_write(CREATE_VISION, {**vision_data, "workspace_id": self.workspace_id})
         
@@ -76,15 +81,13 @@ class VisionRepository:
 
         return self.db.execute(GET_VISION, self._p(id=vision_id))
 
-    def get_all(self) -> list[Any]:
+    def get_all(self, include_archived: bool = False) -> list[Any]:
         """Get all Vision nodes in this workspace."""
+        return self.db.execute(GET_ALL_VISIONS, self._p(include_archived=include_archived))
 
-        return self.db.execute(GET_ALL_VISIONS, self._p())
-
-    def get_by_project(self, project_id: str) -> list[Any]:
+    def get_by_project(self, project_id: str, include_archived: bool = False) -> list[Any]:
         """Get all Vision nodes for a specific project in this workspace."""
-
-        return self.db.execute(GET_PROJECT_VISIONS, self._p(project_id=project_id))
+        return self.db.execute(GET_PROJECT_VISIONS, self._p(project_id=project_id, include_archived=include_archived))
 
     def delete(self, vision_id: str) -> None:
         """Delete a Vision node."""
@@ -93,7 +96,12 @@ class VisionRepository:
             raise ValueError(f"Cannot delete vision {vision_id} because it has associated strategies pursuing it.")
         self.db.execute_write(DELETE_VISION, self._p(id=vision_id))
 
-    def get_strategies(self, vision_id: str) -> list[Any]:
+    def get_strategies(self, vision_id: str, include_archived: bool = False) -> list[Any]:
         """Get strategies pursuing this vision."""
+        return self.db.execute(GET_VISION_STRATEGIES, self._p(vision_id=vision_id, include_archived=include_archived))
 
-        return self.db.execute(GET_VISION_STRATEGIES, self._p(vision_id=vision_id))
+    def set_archived_status(self, vision_id: str, archived: bool) -> list[Any]:
+        """Set the archived status of a vision."""
+        return self.db.execute_write(
+            SET_VISION_ARCHIVED_STATUS, self._p(vision_id=vision_id, archived=archived)
+        )
