@@ -74,6 +74,7 @@ CREATE (v:Vision {
     description: $description,
     project_id: $project_id,
     workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
 })
@@ -86,6 +87,7 @@ CREATE (s:Strategy {
     title: $title,
     description: $description,
     workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
 })
@@ -99,6 +101,7 @@ CREATE (s:Strategy {
     title: $title,
     description: $description,
     workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
 })
@@ -112,6 +115,7 @@ CREATE (g:Goal {
     title: $title,
     description: $description,
     workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
 })
@@ -382,13 +386,25 @@ RETURN u
 """
 
 GET_VISION = "MATCH (v:Vision {id: $id, workspace_id: $workspace_id}) RETURN v"
-GET_ALL_VISIONS = "MATCH (v:Vision {workspace_id: $workspace_id}) RETURN v"
+GET_ALL_VISIONS = """
+MATCH (v:Vision {workspace_id: $workspace_id})
+WHERE $include_archived OR (v.archived IS NULL OR v.archived = false)
+RETURN v
+"""
 
 GET_STRATEGY = "MATCH (s:Strategy {id: $id, workspace_id: $workspace_id}) RETURN s"
-GET_ALL_STRATEGIES = "MATCH (s:Strategy {workspace_id: $workspace_id}) RETURN s"
+GET_ALL_STRATEGIES = """
+MATCH (s:Strategy {workspace_id: $workspace_id})
+WHERE $include_archived OR (s.archived IS NULL OR s.archived = false)
+RETURN s
+"""
 
 GET_GOAL = "MATCH (g:Goal {id: $id, workspace_id: $workspace_id}) RETURN g"
-GET_ALL_GOALS = "MATCH (g:Goal {workspace_id: $workspace_id}) RETURN g"
+GET_ALL_GOALS = """
+MATCH (g:Goal {workspace_id: $workspace_id})
+WHERE $include_archived OR (g.archived IS NULL OR g.archived = false)
+RETURN g
+"""
 
 
 # ── Edge Getters ──────────────────────────────────────────────────────────────
@@ -455,6 +471,7 @@ RETURN p
 
 GET_PROJECT_VISIONS = """
 MATCH (v:Vision {workspace_id: $workspace_id})-[:IN_PROJECT]->(p:Project {id: $project_id, workspace_id: $workspace_id})
+WHERE $include_archived OR (v.archived IS NULL OR v.archived = false)
 RETURN v
 """
 
@@ -476,11 +493,13 @@ RETURN v
 
 GET_VISION_STRATEGIES = """
 MATCH (s:Strategy)-[:PURSUES]->(v:Vision {id: $vision_id, workspace_id: $workspace_id})
+WHERE $include_archived OR (s.archived IS NULL OR s.archived = false)
 RETURN s
 """
 
 GET_STRATEGY_GOALS = """
 MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[:TRACKS_VIA]->(g:Goal)
+WHERE $include_archived OR (g.archived IS NULL OR g.archived = false)
 RETURN g
 """
 
@@ -536,6 +555,7 @@ MATCH (v:Vision {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET v.title = $title)
 FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET v.description = $description)
 FOREACH (_ IN CASE WHEN $project_id IS NOT NULL THEN [1] ELSE [] END | SET v.project_id = $project_id)
+FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET v.archived = $archived)
 SET v.updated_at = datetime()
 RETURN v
 """
@@ -544,6 +564,7 @@ UPDATE_STRATEGY = """
 MATCH (s:Strategy {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET s.title = $title)
 FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET s.description = $description)
+FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET s.archived = $archived)
 SET s.updated_at = datetime()
 RETURN s
 """
@@ -552,6 +573,7 @@ UPDATE_GOAL = """
 MATCH (g:Goal {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET g.title = $title)
 FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET g.description = $description)
+FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET g.archived = $archived)
 SET g.updated_at = datetime()
 RETURN g
 """
@@ -780,6 +802,24 @@ FOREACH(st IN all_subtickets |
 FOREACH(rel IN all_rels |
     SET rel.archived = archived_status
 )
+"""
+
+SET_VISION_ARCHIVED_STATUS = """
+MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})
+SET v.archived = $archived, v.updated_at = datetime()
+RETURN v
+"""
+
+SET_STRATEGY_ARCHIVED_STATUS = """
+MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+SET s.archived = $archived, s.updated_at = datetime()
+RETURN s
+"""
+
+SET_GOAL_ARCHIVED_STATUS = """
+MATCH (g:Goal {id: $goal_id, workspace_id: $workspace_id})
+SET g.archived = $archived, g.updated_at = datetime()
+RETURN g
 """
 
 # ── Labels ─────────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ from ..queries import (
     GET_ALL_GOALS,
     GET_GOAL_STRATEGY,
     GET_GOAL_TICKETS,
+    SET_GOAL_ARCHIVED_STATUS,
 )
 
 class GoalRepository:
@@ -26,7 +27,8 @@ class GoalRepository:
 
     def create(self, goal_data: dict) -> list[Any]:
         """Create a Goal node."""
-
+        if "archived" not in goal_data:
+            goal_data["archived"] = False
         return self.db.execute_write(CREATE_GOAL, {**goal_data, "workspace_id": self.workspace_id})
 
     def update(self, goal_id: str, updates: dict) -> list[Any]:
@@ -45,10 +47,9 @@ class GoalRepository:
 
         return self.db.execute(GET_GOAL, self._p(id=goal_id))
 
-    def get_all(self) -> list[Any]:
+    def get_all(self, include_archived: bool = False) -> list[Any]:
         """Get all Goal nodes in this workspace."""
-
-        return self.db.execute(GET_ALL_GOALS, self._p())
+        return self.db.execute(GET_ALL_GOALS, self._p(include_archived=include_archived))
 
     def delete(self, goal_id: str) -> None:
         """Delete a Goal node."""
@@ -66,3 +67,9 @@ class GoalRepository:
         """Get tickets executing this goal."""
 
         return self.db.execute(GET_GOAL_TICKETS, self._p(goal_id=goal_id))
+
+    def set_archived_status(self, goal_id: str, archived: bool) -> list[Any]:
+        """Set the archived status of a goal."""
+        return self.db.execute_write(
+            SET_GOAL_ARCHIVED_STATUS, self._p(goal_id=goal_id, archived=archived)
+        )

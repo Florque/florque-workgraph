@@ -12,6 +12,7 @@ from ..queries import (
     CREATE_TRACKS_VIA,
     DELETE_TRACKS_VIA,
     GET_STRATEGY_GOALS,
+    SET_STRATEGY_ARCHIVED_STATUS,
 )
 
 class StrategyRepository:
@@ -30,6 +31,8 @@ class StrategyRepository:
 
     def create(self, strategy_data: dict, vision_id: str) -> list[Any]:
         """Create a Strategy node and connect it to a Vision."""
+        if "archived" not in strategy_data:
+            strategy_data["archived"] = False
         params = {**strategy_data, "vision_id": vision_id, "workspace_id": self.workspace_id}
         return self.db.execute_write(CREATE_STRATEGY_PURSUES_VISION, params)
 
@@ -49,10 +52,9 @@ class StrategyRepository:
 
         return self.db.execute(GET_STRATEGY, self._p(id=strategy_id))
 
-    def get_all(self) -> list[Any]:
+    def get_all(self, include_archived: bool = False) -> list[Any]:
         """Get all Strategy nodes in this workspace."""
-
-        return self.db.execute(GET_ALL_STRATEGIES, self._p())
+        return self.db.execute(GET_ALL_STRATEGIES, self._p(include_archived=include_archived))
 
     def delete(self, strategy_id: str) -> None:
         """Delete a Strategy node."""
@@ -80,7 +82,12 @@ class StrategyRepository:
         """Remove Strategy TRACKS_VIA Goal."""
         self.db.execute_write(DELETE_TRACKS_VIA, self._p(strategy_id=strategy_id, goal_id=goal_id))
 
-    def get_goals(self, strategy_id: str) -> list[Any]:
+    def get_goals(self, strategy_id: str, include_archived: bool = False) -> list[Any]:
         """Get goals tracked via this strategy."""
+        return self.db.execute(GET_STRATEGY_GOALS, self._p(strategy_id=strategy_id, include_archived=include_archived))
 
-        return self.db.execute(GET_STRATEGY_GOALS, self._p(strategy_id=strategy_id))
+    def set_archived_status(self, strategy_id: str, archived: bool) -> list[Any]:
+        """Set the archived status of a strategy."""
+        return self.db.execute_write(
+            SET_STRATEGY_ARCHIVED_STATUS, self._p(strategy_id=strategy_id, archived=archived)
+        )
