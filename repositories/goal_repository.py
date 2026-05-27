@@ -9,6 +9,7 @@ from ..queries import (
     GET_GOAL_STRATEGY,
     GET_GOAL_TICKETS,
     SET_GOAL_ARCHIVED_STATUS,
+    CREATE_GOAL_TRACKING_STRATEGY,
 )
 
 class GoalRepository:
@@ -25,11 +26,12 @@ class GoalRepository:
 
         return {"workspace_id": self.workspace_id, **kwargs}
 
-    def create(self, goal_data: dict) -> list[Any]:
-        """Create a Goal node."""
+    def create(self, goal_data: dict, strategy_id: str) -> list[Any]:
+        """Create a Goal node and connect it to a Strategy."""
         if "archived" not in goal_data:
             goal_data["archived"] = False
-        return self.db.execute_write(CREATE_GOAL, {**goal_data, "workspace_id": self.workspace_id})
+        params = {**goal_data, "strategy_id": strategy_id, "workspace_id": self.workspace_id}
+        return self.db.execute_write(CREATE_GOAL_TRACKING_STRATEGY, params)
 
     def update(self, goal_id: str, updates: dict) -> list[Any]:
         """Update a Goal node."""

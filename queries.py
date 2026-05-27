@@ -109,6 +109,21 @@ CREATE (s)-[:PURSUES]->(v)
 RETURN s
 """
 
+CREATE_GOAL_TRACKING_STRATEGY = """
+MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+CREATE (g:Goal {
+    id: $id,
+    title: $title,
+    description: $description,
+    workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
+    created_at: datetime(),
+    updated_at: datetime()
+})
+CREATE (s)-[:TRACKS_VIA]->(g)
+RETURN g
+"""
+
 CREATE_GOAL = """
 CREATE (g:Goal {
     id: $id,
