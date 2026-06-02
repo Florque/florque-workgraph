@@ -57,6 +57,7 @@ class VisionRepository:
             "title": updates.get("title"),
             "description": updates.get("description"),
             "project_id": updates.get("project_id"),
+            "archived": updates.get("archived"),
         }
 
         rows = self.db.execute_write(UPDATE_VISION, params)
