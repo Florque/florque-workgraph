@@ -40,6 +40,7 @@ class GoalRepository:
             "workspace_id": self.workspace_id,
             "title": updates.get("title"),
             "description": updates.get("description"),
+            "archived": updates.get("archived"),
         }
 
         return self.db.execute_write(UPDATE_GOAL, params)
