@@ -1,7 +1,7 @@
 from typing import Any
 
-from session import GraphManager
-from queries import (
+from ..session import GraphManager
+from ..queries import (
     CREATE_USER,
     UPDATE_USER,
     DELETE_USER,
@@ -18,7 +18,6 @@ from queries import (
     GET_MEMBERSHIP_ROLES,
 )
 from .membership_repository import MembershipRepository
-from typing import Any, Optional
 
 
 class UserRepository:

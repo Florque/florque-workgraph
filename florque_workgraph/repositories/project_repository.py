@@ -1,7 +1,7 @@
 from typing import Any
 
-from session import GraphManager
-from queries import (
+from ..session import GraphManager
+from ..queries import (
     CREATE_PROJECT,
     DELETE_PROJECT,
     GET_PROJECT,

@@ -1,6 +1,6 @@
 from typing import Any
-from session import GraphManager
-from queries import (
+from ..session import GraphManager
+from ..queries import (
     CREATE_VISION,
     UPDATE_VISION,
     DELETE_VISION,

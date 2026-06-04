@@ -75,7 +75,7 @@ def _create_ticket(ticket_repo, ticket_id, project_id, parent_id=None, goal_id=N
         ticket_data["goal_id"] = goal_id
     ticket_repo.create(ticket_data)
 
-@patch("repositories.workspace_repository.get_user_by_id", return_value=None)
+@patch("florque_workgraph.repositories.workspace_repository.get_user_by_id", return_value=None)
 def test_workspace_repository_methods(mock_get_user, repos):
     capability_repo = repos["capability"]
     workspace_repo = repos["workspace"]

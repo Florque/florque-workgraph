@@ -1,6 +1,5 @@
 from typing import Any, Optional
-
-from uuid_utils import uuid4
+from uuid import uuid4
 
 try:
     from sql_db.db_auth_manager import get_user_by_id
@@ -8,8 +7,8 @@ except ImportError:
     # This will be mocked in tests
     get_user_by_id = None
 
-from session import GraphManager
-from queries import (
+from ..session import GraphManager
+from ..queries import (
     CREATE_WORKSPACE,
     DELETE_WORKSPACE,
     GET_WORKSPACE,
@@ -72,8 +71,6 @@ class WorkspaceRepository:
         membership_id = membership_rows[0][0].properties["id"]
 
         # 4. Create Admin role for this workspace
-        from uuid import uuid4
-
         role_id = str(uuid4())
         role_data = {
             "id": role_id,
