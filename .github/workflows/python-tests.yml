@@ -10,6 +10,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    defaults:
+      run:
+        working-directory: ./florque-workgraph
+
     services:
       memgraph:
         image: memgraph/memgraph
@@ -18,6 +22,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -31,6 +37,8 @@ jobs:
         pip install -e .
 
     - name: Wait for Memgraph
+      # This step needs to run from the root, so we override the default working-directory
+      working-directory: .
       run: |
         for i in `seq 1 20`; do
           nc -z localhost 7666 && echo "Memgraph is up" && exit 0
@@ -41,4 +49,4 @@ jobs:
         exit 1
 
     - name: Run tests
-      run: pytest
+      run: pytest tests/
