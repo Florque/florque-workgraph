@@ -1,6 +1,6 @@
 import pytest
 
-from repositories import (
+from florque_workgraph.repositories import (
     CapabilityRepository,
     MembershipRepository,
     ProjectRepository,
@@ -10,7 +10,7 @@ from repositories import (
     UserRepository,
     WorkspaceRepository,
 )
-from session import GraphManager
+from florque_workgraph.session import GraphManager
 
 
 def _ids(rows):
