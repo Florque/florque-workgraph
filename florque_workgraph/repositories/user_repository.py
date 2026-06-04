@@ -18,7 +18,6 @@ from ..queries import (
     GET_MEMBERSHIP_ROLES,
 )
 from .membership_repository import MembershipRepository
-from typing import Any, Optional
 
 
 class UserRepository:

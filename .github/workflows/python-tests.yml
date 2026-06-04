@@ -1,0 +1,45 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+
+    services:
+      memgraph:
+        image: memgraph/memgraph
+        ports:
+          - 7666:7687
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+        pip install -e .
+    
+    - name: Wait for Memgraph
+      run: |
+        for i in `seq 1 20`; do
+          nc -z localhost 7666 && echo "Memgraph is up" && exit 0
+          echo "Waiting for Memgraph..."
+          sleep 1
+        done
+        echo "Timed out waiting for Memgraph"
+        exit 1
+    
+    - name: Run tests
+      run: pytest tests/

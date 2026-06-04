@@ -1,6 +1,11 @@
 from typing import Any, Optional
+from uuid import uuid4
 
-from uuid_utils import uuid4
+try:
+    from sql_db.db_auth_manager import get_user_by_id
+except ImportError:
+    # This will be mocked in tests
+    get_user_by_id = None
 
 from ..session import GraphManager
 from ..queries import (
@@ -46,7 +51,7 @@ class WorkspaceRepository:
         user_rows = user_repository.get(creator_user_id)
         
         if not user_rows:
-            from sql_db.db_auth_manager import (get_user_by_id)
+
             try:
                 user_data = get_user_by_id(int(creator_user_id))
             except (ValueError, TypeError):
@@ -66,8 +71,6 @@ class WorkspaceRepository:
         membership_id = membership_rows[0][0].properties["id"]
 
         # 4. Create Admin role for this workspace
-        from uuid import uuid4
-
         role_id = str(uuid4())
         role_data = {
             "id": role_id,
@@ -102,7 +105,7 @@ class WorkspaceRepository:
         """
         
         if not email:
-            from sql_db.db_auth_manager import get_user_by_id
+
             
             try:
                 user = get_user_by_id(int(user_id))

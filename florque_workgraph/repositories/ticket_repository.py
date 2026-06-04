@@ -57,30 +57,48 @@ class TicketRepository:
     # ── Node CRUD ──────────────────────────────────────────────────────────────
 
     def create(self, ticket_data: dict) -> list[Any]:
-        """Create a Ticket node. ticket_data must contain: id, title, description, status, project_id.
+        """Create a Ticket node. ticket_data must contain: id, title, description, status, project_id, goal_id or parent_id.
         workspace_id is always set from the repository context."""
         params = {**ticket_data, "workspace_id": self.workspace_id}
         # Always provide a value for the optional 'archived' property on the node
         params.setdefault("archived", None)
+        
+        project_id = ticket_data.get("project_id")
+        if not project_id:
+            raise ValueError("A ticket must be associated with a project.")
+
+        parent_ticket_id = ticket_data.get("parent_id")
+        goal_id = ticket_data.get("goal_id")
+
+        if not parent_ticket_id and not goal_id:
+            raise ValueError("A ticket must have either a goal or a parent ticket.")
+            
+        ticket_id = ticket_data.get("id")
+
+        # Create the ticket node
         rows = self.db.execute_write(CREATE_TICKET, params)
 
-        # If a project_id was provided, also ensure the IN_PROJECT relationship exists.
-        project_id = ticket_data.get("project_id")
-        ticket_id = ticket_data.get("id")
-        if project_id and ticket_id:
+        # Create the relationship to the project
+        if ticket_id:
             try:
                 self.db.execute_write(CREATE_IN_PROJECT, {"ticket_id": ticket_id, "project_id": project_id, "workspace_id": self.workspace_id})
             except Exception:
                 # Relationship creation failure shouldn't break node creation; log if needed upstream.
                 pass
-        
-        parent_ticket_id = ticket_data.get("parent_id")
-        
+
+        # Create the relationship to the parent ticket or goal
         if parent_ticket_id:
             try:
                 # Always provide a value for the optional 'archived' property on the relationship
                 subtask_params = self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None)
                 self.db.execute_write(CREATE_SUBTASK, subtask_params)
+            except Exception:
+                pass
+        elif goal_id:
+            try:
+                # Always provide a value for the optional 'archived' property on the relationship
+                executes_params = self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None)
+                self.db.execute_write(CREATE_EXECUTES, executes_params)
             except Exception:
                 pass
 

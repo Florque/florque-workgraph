@@ -145,6 +145,18 @@ Standard task trackers often treat tickets as isolated units. By embedding ticke
 - **Domain Repositories**: Data access is encapsulated in domain-specific repositories (e.g., `TicketRepository`, `GoalRepository`, `StrategyRepository`, `VisionRepository`).
 - **Tenant Isolation**: All operations are workspace-scoped by default to ensure strict multi-tenant data isolation.
 
+## Development Setup
+
+To make this package's modules (e.g., `session`, `repositories`) available to other parts of the application, it must be installed in "editable" mode. This creates a link to your source code instead of copying it, so any changes you make are immediately reflected without needing to re-install.
+
+From the root directory of the backend project (`florque-backend/florque`), run:
+
+```bash
+pip install -e florque_workgraph
+```
+
+This only needs to be done once, or whenever you change the dependencies in `pyproject.toml`.
+
 ## WorkGraph topology
 ```mermaid
 graph TD

@@ -1,4 +1,5 @@
 from typing import Any, Optional
+import uuid
 
 from ..session import GraphManager
 from ..queries import (
@@ -34,7 +35,6 @@ class MembershipRepository:
             return f"{user_id}:{workspace_id}"
         
         # For detached memberships, we need a unique ID to avoid collisions
-        import uuid
         return f"detached_{uuid.uuid4().hex[:8]}:{workspace_id}"
 
     # ── Node CRUD ──────────────────────────────────────────────────────────────

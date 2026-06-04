@@ -22,6 +22,3 @@ test = [
 
 [tool.setuptools]
 packages = ["florque_workgraph"]
-
-[tool.setuptools.package-dir]
-"florque_workgraph" = "."
