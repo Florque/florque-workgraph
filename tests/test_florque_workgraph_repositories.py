@@ -1,6 +1,6 @@
 import pytest
 
-from repositories import (
+from ..repositories import (
     CapabilityRepository,
     MembershipRepository,
     ProjectRepository,
