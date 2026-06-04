@@ -1,6 +1,6 @@
 from typing import Any
-from ..session import GraphManager
-from ..queries import (
+from session import GraphManager
+from queries import (
     CREATE_STRATEGY_PURSUES_VISION,
     UPDATE_STRATEGY,
     DELETE_STRATEGY,

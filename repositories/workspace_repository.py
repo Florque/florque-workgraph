@@ -2,8 +2,14 @@ from typing import Any, Optional
 
 from uuid_utils import uuid4
 
-from ..session import GraphManager
-from ..queries import (
+try:
+    from sql_db.db_auth_manager import get_user_by_id
+except ImportError:
+    # This will be mocked in tests
+    get_user_by_id = None
+
+from session import GraphManager
+from queries import (
     CREATE_WORKSPACE,
     DELETE_WORKSPACE,
     GET_WORKSPACE,
@@ -46,7 +52,7 @@ class WorkspaceRepository:
         user_rows = user_repository.get(creator_user_id)
         
         if not user_rows:
-            from sql_db.db_auth_manager import (get_user_by_id)
+
             try:
                 user_data = get_user_by_id(int(creator_user_id))
             except (ValueError, TypeError):
@@ -102,7 +108,7 @@ class WorkspaceRepository:
         """
         
         if not email:
-            from sql_db.db_auth_manager import get_user_by_id
+
             
             try:
                 user = get_user_by_id(int(user_id))

@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
-from ..session import GraphManager
-from ..queries import (
+from session import GraphManager
+from queries import (
     CREATE_MEMBERSHIP,
     DELETE_MEMBERSHIP,
     GET_MEMBERSHIP,

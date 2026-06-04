@@ -1,5 +1,5 @@
-from .session import GraphManager, UnitOfWork
-from .repositories import (
+from session import GraphManager, UnitOfWork
+from repositories import (
     TicketRepository,
     UserRepository,
     TimeboxRepository,

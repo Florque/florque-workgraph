@@ -9,10 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: florque-workgraph
+
 
     services:
       memgraph:
@@ -22,9 +19,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      # Give the checkout a predictable name to avoid double 'florque-workgraph'
-      with:
-        path: florque-workgraph
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -48,4 +42,4 @@ jobs:
         exit 1
     
     - name: Run tests
-      run: pytest --pyargs florque_workgraph.tests
+      run: pytest tests/

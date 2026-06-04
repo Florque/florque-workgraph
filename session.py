@@ -4,7 +4,7 @@ from typing import Any
 
 import mgclient
 
-from .queries import CONSTRAINTS
+from queries import CONSTRAINTS
 
 logger = logging.getLogger(__name__)
 
