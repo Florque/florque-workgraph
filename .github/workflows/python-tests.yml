@@ -48,4 +48,4 @@ jobs:
         exit 1
     
     - name: Run tests
-      run: pytest
+      run: pytest --pyargs florque_workgraph.tests
