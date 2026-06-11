@@ -31,11 +31,12 @@ class ReactiveInitiativeRepository:
         project_id = initiative_data.get("project_id")
         if not project_id:
             raise ValueError("project_id is required to create a ReactiveInitiative.")
+        
+        params = self._p(**initiative_data)
+        params.setdefault("description", "")
+        params.setdefault("archived", False)
             
-        if "archived" not in initiative_data:
-            initiative_data["archived"] = False
-            
-        return self.db.execute_write(CREATE_REACTIVE_INITIATIVE_IN_PROJECT, self._p(**initiative_data))
+        return self.db.execute_write(CREATE_REACTIVE_INITIATIVE_IN_PROJECT, params)
 
 
     def update(self, initiative_id: str, updates: dict) -> list[Any]:

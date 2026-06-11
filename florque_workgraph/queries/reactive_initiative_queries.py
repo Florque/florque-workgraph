@@ -4,10 +4,10 @@ CREATE_REACTIVE_INITIATIVE = """
         id: $id,
         workspace_id: $workspace_id,
         title: $title,
-        description: $description,
+        description: coalesce($description, ''),
         archived: $archived,
-        created_at: ZONEDDATETIME(ZONEDDATETIME(DATETIME(),'Etc/UTC'),'UTC'),
-        updated_at: ZONEDDATETIME(ZONEDDATETIME(DATETIME(),'Etc/UTC'),'UTC')
+        created_at: datetime(),
+        updated_at: datetime()
     })
     RETURN ri
 """
@@ -23,7 +23,7 @@ UPDATE_REACTIVE_INITIATIVE = """
         ri.title = $title,
         ri.description = $description,
         ri.archived = $archived,
-        ri.updated_at = ZONEDDATETIME(ZONEDDATETIME(DATETIME(),'Etc/UTC'),'UTC')
+        ri.updated_at = datetime()
     RETURN ri
 """
 
@@ -35,7 +35,7 @@ DELETE_REACTIVE_INITIATIVE = """
 SET_REACTIVE_INITIATIVE_ARCHIVED_STATUS = """
     MATCH (ri:ReactiveInitiative {id: $id, workspace_id: $workspace_id})
     SET ri.archived = $archived,
-        ri.updated_at = ZONEDDATETIME(ZONEDDATETIME(DATETIME(),'Etc/UTC'),'UTC')
+        ri.updated_at = datetime()
     RETURN ri
 """
 
@@ -52,10 +52,10 @@ CREATE_REACTIVE_INITIATIVE_IN_PROJECT = """
         id: $id,
         workspace_id: $workspace_id,
         title: $title,
-        description: $description,
+        description: coalesce($description, ''),
         archived: $archived,
-        created_at: ZONEDDATETIME(ZONEDDATETIME(DATETIME(),'Etc/UTC'),'UTC'),
-        updated_at: ZONEDDATETIME(ZONEDDATETIME(DATETIME(),'Etc/UTC'),'UTC')
+        created_at: datetime(),
+        updated_at: datetime()
     })
     MERGE (ri)-[:IN_PROJECT]->(p)
     RETURN ri

@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..session import GraphManager
-from ..queries import (
+from ..queries.queries import (
     CREATE_TICKET,
     DELETE_TICKET,
     GET_TICKET,

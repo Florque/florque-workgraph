@@ -1,6 +1,6 @@
 from typing import Any
 from ..session import GraphManager
-from ..queries import (
+from ..queries.queries import (
     CREATE_GOAL,
     UPDATE_GOAL,
     DELETE_GOAL,

@@ -2,7 +2,7 @@ from typing import Any, Optional
 import uuid
 
 from ..session import GraphManager
-from ..queries import (
+from ..queries.queries import (
     CREATE_MEMBERSHIP,
     DELETE_MEMBERSHIP,
     GET_MEMBERSHIP,
