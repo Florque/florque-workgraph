@@ -35,6 +35,9 @@ from ..queries import (
     GET_ANCESTORS_WITH_GOALS,
     SET_TICKET_ARCHIVED_STATUS,
     SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
+    LINK_TICKET_TO_REACTIVE_INITIATIVE,
+    CHANGE_TICKET_REACTIVE_INITIATIVE,
+    CREATE_TICKET_EXECUTING_REACTIVE_INITIATIVE,
 )
 
 
@@ -57,52 +60,61 @@ class TicketRepository:
     # ── Node CRUD ──────────────────────────────────────────────────────────────
 
     def create(self, ticket_data: dict) -> list[Any]:
-        """Create a Ticket node. ticket_data must contain: id, title, description, status, project_id, goal_id or parent_id.
-        workspace_id is always set from the repository context."""
-        params = {**ticket_data, "workspace_id": self.workspace_id}
-        # Always provide a value for the optional 'archived' property on the node
-        params.setdefault("archived", None)
-        
+        """Create a Ticket node. Dispatches to a specific creation method based on the parent type."""
         project_id = ticket_data.get("project_id")
         if not project_id:
             raise ValueError("A ticket must be associated with a project.")
 
         parent_ticket_id = ticket_data.get("parent_id")
         goal_id = ticket_data.get("goal_id")
-
+        reactive_initiative_id = ticket_data.get("reactive_initiative_id")
+        
+        # Dispatch to the appropriate creator method
+        if reactive_initiative_id:
+            return self.create_ticket_executing_reactive_initiative(ticket_data)
+        
+        # --- Fallback to original logic for other parent types ---
         if not parent_ticket_id and not goal_id:
-            raise ValueError("A ticket must have either a goal or a parent ticket.")
-            
-        ticket_id = ticket_data.get("id")
+            raise ValueError("A ticket must have either a goal, a parent ticket, or a reactive initiative.")
 
-        # Create the ticket node
+        params = self._p(**ticket_data)
+        params.setdefault("archived", None)
+        ticket_id = ticket_data.get("id")
+        
         rows = self.db.execute_write(CREATE_TICKET, params)
 
-        # Create the relationship to the project
         if ticket_id:
+            # Create relationship to project
             try:
-                self.db.execute_write(CREATE_IN_PROJECT, {"ticket_id": ticket_id, "project_id": project_id, "workspace_id": self.workspace_id})
-            except Exception:
-                # Relationship creation failure shouldn't break node creation; log if needed upstream.
-                pass
-
-        # Create the relationship to the parent ticket or goal
-        if parent_ticket_id:
-            try:
-                # Always provide a value for the optional 'archived' property on the relationship
-                subtask_params = self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None)
-                self.db.execute_write(CREATE_SUBTASK, subtask_params)
-            except Exception:
-                pass
-        elif goal_id:
-            try:
-                # Always provide a value for the optional 'archived' property on the relationship
-                executes_params = self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None)
-                self.db.execute_write(CREATE_EXECUTES, executes_params)
+                self.db.execute_write(CREATE_IN_PROJECT, self._p(ticket_id=ticket_id, project_id=project_id))
             except Exception:
                 pass
 
+            # Create relationship to parent ticket or goal
+            if parent_ticket_id:
+                try:
+                    self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None))
+                except Exception:
+                    pass
+            elif goal_id:
+                try:
+                    self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
+                except Exception:
+                    pass
         return rows
+
+    def create_ticket_executing_reactive_initiative(self, ticket_data: dict) -> list[Any]:
+        """Creates a Ticket and atomically links it to a ReactiveInitiative."""
+        required_keys = ["id", "title", "project_id", "reactive_initiative_id"]
+        if not all(key in ticket_data for key in required_keys):
+            raise ValueError(f"Missing one of required keys for ticket creation: {required_keys}")
+        
+        params = self._p(**ticket_data)
+        params.setdefault("status", "todo")
+        params.setdefault("description", "")
+        params.setdefault("archived", None)
+        
+        return self.db.execute_write(CREATE_TICKET_EXECUTING_REACTIVE_INITIATIVE, params)
 
     def update(self, ticket_id: str, updates: dict) -> list[Any]:
         """Update fields on a Ticket node. `updates` may include title, description, status, project_id.
@@ -269,3 +281,12 @@ class TicketRepository:
     def get_ancestors_with_goals(self, ticket_id: str) -> list[Any]:
         """Get ancestors of a ticket with their goals, ordered by distance."""
         return self.db.execute(GET_ANCESTORS_WITH_GOALS, self._p(ticket_id=ticket_id))
+
+    # ── Reactive Initiative ────────────────────────────────────────────────────
+
+    def change_reactive_initiative(self, ticket_id: str, new_reactive_initiative_id: str) -> None:
+        """Move a ticket to execute a different ReactiveInitiative."""
+        # Delete the old :EXECUTES relationship
+        self.db.execute_write(CHANGE_TICKET_REACTIVE_INITIATIVE, self._p(ticket_id=ticket_id))
+        # Create the new one
+        self.db.execute_write(LINK_TICKET_TO_REACTIVE_INITIATIVE, self._p(ticket_id=ticket_id, reactive_initiative_id=new_reactive_initiative_id))

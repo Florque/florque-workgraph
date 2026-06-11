@@ -82,10 +82,6 @@ class VisionRepository:
 
         return self.db.execute(GET_VISION, self._p(id=vision_id))
 
-    def get_all(self, include_archived: bool = False) -> list[Any]:
-        """Get all Vision nodes in this workspace."""
-        return self.db.execute(GET_ALL_VISIONS, self._p(include_archived=include_archived))
-
     def get_by_project(self, project_id: str, include_archived: bool = False) -> list[Any]:
         """Get all Vision nodes for a specific project in this workspace."""
         return self.db.execute(GET_PROJECT_VISIONS, self._p(project_id=project_id, include_archived=include_archived))

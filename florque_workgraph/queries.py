@@ -242,6 +242,12 @@ MERGE (t)-[r:EXECUTES]->(g)
 SET r.archived = coalesce($archived, false)
 """
 
+LINK_TICKET_TO_REACTIVE_INITIATIVE = """
+    MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
+    MATCH (ri:ReactiveInitiative {id: $reactive_initiative_id, workspace_id: $workspace_id})
+    MERGE (t)-[:EXECUTES]->(ri)
+"""
+
 # ── Membership ─────────────────────────────────────────────────────────────────
 # Membership node creation without edges, used for both attached and detached memberships.
 CREATE_MEMBERSHIP = """
@@ -356,6 +362,11 @@ DELETE r
 DELETE_EXECUTES = """
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:EXECUTES]->(g:Goal {id: $goal_id, workspace_id: $workspace_id})
 DELETE r
+"""
+
+CHANGE_TICKET_REACTIVE_INITIATIVE = """
+    MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:EXECUTES]->(:ReactiveInitiative)
+    DELETE r
 """
 
 # ── Node Getters ──────────────────────────────────────────────────────────────
@@ -552,6 +563,23 @@ FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END |
 )
 SET t.updated_at = datetime()
 RETURN t
+"""
+
+CREATE_TICKET_EXECUTING_REACTIVE_INITIATIVE = """
+    MATCH (ri:ReactiveInitiative {id: $reactive_initiative_id, workspace_id: $workspace_id})
+    CREATE (t:Ticket {
+        id: $id,
+        title: $title,
+        description: $description,
+        status: $status,
+        project_id: $project_id,
+        workspace_id: $workspace_id,
+        archived: coalesce($archived, false),
+        created_at: datetime(),
+        updated_at: datetime()
+    })
+    CREATE (t)-[:EXECUTES]->(ri)
+    RETURN t
 """
 
 UPDATE_PROJECT = """
