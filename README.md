@@ -129,6 +129,22 @@ This also scales gracefully — when the project grows large goals can become ne
 
 By strictly linking tactics all the way up to a vision, every piece of work inherently carries its justification and context.
 
+## Reactive Initiative: Handling Unplanned Work
+
+Not all work fits neatly into the top-down **Vision-Strategy-Goal** hierarchy. Some tasks are reactive, emergent, or don't belong to a larger strategic objective. For these, the Workgraph provides the **Reactive Initiative** node.
+
+A Reactive Initiative is a container for ad-hoc tasks, such as:
+- **SRE Incidents**: Urgent fixes that need to be tracked.
+- **Bugs**: Unforeseen issues that arise during development.
+- **Copyright Requests**: Atomic tasks like writing a blog post or social media update.
+- **One-off Tasks**: Miscellaneous duties that don't align with a specific goal.
+
+Key characteristics:
+- **Parallel to Vision**: It exists at the same level as the Vision, but serves a different purpose. It's for capturing work that is *not* part of the grand strategic plan.
+- **Direct Execution**: Tickets can be directly linked to a Reactive Initiative without needing to belong to a Goal or Strategy. This provides a lightweight way to manage and track unplanned work while keeping it separate from the strategic backlog.
+
+This ensures that all work is captured in the graph, maintaining full context, without polluting the clarity of the VSGT hierarchy with tasks that don't fit.
+
 ## Empowering AI Agents
 
 The core thesis behind the Florque Workgraph is to **preserve the entire context of all tactics**. 
@@ -160,49 +176,64 @@ This only needs to be done once, or whenever you change the dependencies in `pyp
 ## WorkGraph topology
 ```mermaid
 graph TD
+    subgraph "Strategic Work"
+        direction TB
+        V[Vision<br/> Become leading AI-powered project co-pilot]
 
-    V[Vision<br/> Become leading AI-powered project co-pilot]
+        S1[Strategy<br/> Focus on solo builders]
+        S2[Strategy<br/> Leverage AI for task generation]
 
-    S1[Strategy<br/> Focus on solo builders]
-    S2[Strategy<br/> Leverage AI for task generation]
+        G1[Goal<br/> 10k beta users]
+        G2[Goal<br/> High activation rate]
+        G3[Goal<br/> Validate graph usability]
 
-    G1[Goal<br/> 10k beta users]
-    G2[Goal<br/> High activation rate]
-    G3[Goal<br/> Validate graph usability]
+        T1[Task<br/> Launch on Product Hunt]
+        T4[Task<br/> Add task breakdown feature]
 
-    T1[Task<br/> Launch on Product Hunt]
-    T4[Task<br/> Add task breakdown feature]
+        %% Subtickets (execution level)
+        ST8[Task<br/> Implement subtask generation]
+        ST9[Task<br/> Refine output quality]
 
-    %% Subtickets (execution level)
-    ST8[Task<br/> Implement subtask generation]
-    ST9[Task<br/> Refine output quality]
+        %% Vision to Strategy
+        V -->|defines direction| S1
+        V -->|defines direction| S2
 
-    %% Vision to Strategy
-    V -->|defines direction| S1
-    V -->|defines direction| S2
+        %% Strategy to Goals
+        S1 -->|tracked_by| G1
+        S2 -->|tracked_by| G2
+        S2 -->|tracked_by| G3
 
-    %% Strategy to Goals
-    S1 -->|tracked_by| G1
-    S2 -->|tracked_by| G2
-    S2 -->|tracked_by| G3
+        %% Goals to Tactics
+        G1 -->|implemented by| T1
+        G2 -->|implemented by| T4
 
-    %% Goals to Tactics
-    G1 -->|implemented by| T1
-    G2 -->|implemented by| T4
+        %% SUBTICKET edges (explicit)
+        T4 -->|SUBTICKET| ST8
+        T4 -->|SUBTICKET| ST9
+    end
 
-    %% SUBTICKET edges (explicit)
-    T4 -->|SUBTICKET| ST8
-    T4 -->|SUBTICKET| ST9
+    subgraph "Reactive Work"
+        direction TB
+        RI[Reactive Initiative<br/>Bugs, Incidents, etc.]
+        T_BUG[Task<br/>Fix login issue]
+        T_INCIDENT[Task<br/>Resolve API outage]
+
+        RI -->|executed by| T_BUG
+        RI -->|executed by| T_INCIDENT
+    end
 
     %% Styles
     classDef vision fill:#1e3a8a,color:#ffffff,stroke:#1e3a8a,stroke-width:2px,font-weight:bold;
     classDef strategy fill:#2563eb,color:#ffffff,stroke:#1d4ed8,stroke-width:2px;
     classDef goal fill:#10b981,color:#ffffff,stroke:#059669,stroke-width:2px;
     classDef tactic fill:#f59e0b,color:#000000,stroke:#d97706,stroke-width:2px;
+    classDef reactive fill:#f43f5e,color:#ffffff,stroke:#e11d48,stroke-width:2px;
+
 
     %% Apply styles
     class V vision;
     class S1,S2,S3 strategy;
     class G1,G2,G3 goal;
-    class T1,T2,T3,T4,T5,ST1,ST2,ST3,ST4,ST5,ST6,ST7,ST8,ST9 tactic;
+    class T1,T2,T3,T4,T5,ST1,ST2,ST3,ST4,ST5,ST6,ST7,ST8,ST9,T_BUG,T_INCIDENT tactic;
+    class RI reactive;
 ```
