@@ -8,7 +8,7 @@ except ImportError:
     get_user_by_id = None
 
 from ..session import GraphManager
-from ..queries import (
+from ..queries.queries import (
     CREATE_WORKSPACE,
     DELETE_WORKSPACE,
     GET_WORKSPACE,

@@ -1,6 +1,6 @@
 from typing import Any
 from ..session import GraphManager
-from ..queries import (
+from ..queries.queries import (
     CREATE_VISION,
     UPDATE_VISION,
     DELETE_VISION,
@@ -81,10 +81,6 @@ class VisionRepository:
         """Get a single Vision node."""
 
         return self.db.execute(GET_VISION, self._p(id=vision_id))
-
-    def get_all(self, include_archived: bool = False) -> list[Any]:
-        """Get all Vision nodes in this workspace."""
-        return self.db.execute(GET_ALL_VISIONS, self._p(include_archived=include_archived))
 
     def get_by_project(self, project_id: str, include_archived: bool = False) -> list[Any]:
         """Get all Vision nodes for a specific project in this workspace."""

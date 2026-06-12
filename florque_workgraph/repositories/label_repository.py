@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..session import GraphManager
-from ..queries import (
+from ..queries.queries import (
     CREATE_LABEL,
     GET_LABEL,
     GET_ALL_LABELS,
