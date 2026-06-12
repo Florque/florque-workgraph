@@ -10,6 +10,7 @@ from .vision_repository import VisionRepository
 from .strategy_repository import StrategyRepository
 from .goal_repository import GoalRepository
 from .label_repository import LabelRepository
+from .reactive_initiative_repository import ReactiveInitiativeRepository
 
 __all__ = [
     "TicketRepository",
@@ -24,4 +25,5 @@ __all__ = [
     "StrategyRepository",
     "GoalRepository",
     "LabelRepository",
+    "ReactiveInitiativeRepository",
 ]

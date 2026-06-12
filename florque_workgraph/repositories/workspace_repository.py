@@ -101,23 +101,10 @@ class WorkspaceRepository:
 
     def get_user_workspaces(self, user_id: str, email: Optional[str] = None) -> list[Any]:
         """Return all Workspace nodes where the user is a member. 
-        Automatically links any detached memberships associated with the provided email.
+        If an email is provided, it first links any detached memberships associated with that email.
         """
-        
-        if not email:
-
-            
-            try:
-                user = get_user_by_id(int(user_id))
-                email = getattr(user, "email", None)
-            except (ValueError, TypeError):
-                email = None
-            
-            if email:
-                user_repository = UserRepository(self.db)
-                user_repository.update(user_id, {"email": email} if email else {})
-        
         if email:
+            # This query will find pending memberships by email and attach them to the user
             self.db.execute_write(LINK_DETACHED_MEMBERSHIPS, {"user_id": user_id, "email": email})
             
         return self.db.execute(GET_USER_WORKSPACES, {"user_id": user_id})
