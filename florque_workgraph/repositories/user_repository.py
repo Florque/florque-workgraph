@@ -63,6 +63,33 @@ class UserRepository:
         
         return self.db.execute_write(UPDATE_USER, {"id": user_id, **updated_props})  # Using UPDATE_USER for upsert behavior
 
+    def get_or_create_user(self, user_id: str, user_details: dict) -> list[Any]:
+        """
+        Retrieves a user by ID. If the user does not exist, creates them
+        with the provided details. If the user exists, it updates the name
+        and email if they have changed.
+        """
+        existing_user_rows = self.get(user_id)
+        if existing_user_rows:
+            existing_user_props = self._row_to_dict(existing_user_rows[0])
+            updates = {}
+            if user_details.get("name") and user_details["name"] != existing_user_props.get("name"):
+                updates["name"] = user_details["name"]
+            if user_details.get("email") and user_details["email"] != existing_user_props.get("email"):
+                updates["email"] = user_details["email"]
+            
+            if updates:
+                self.update(user_id, updates)
+            
+            return existing_user_rows
+        
+        # User doesn't exist, create them
+        return self.create({
+            "id": user_id,
+            "name": user_details.get("name", "Unknown"),
+            "email": user_details.get("email", "")
+        })
+
     def get(self, user_id: str) -> list[Any]:
         """Return a single User node by id."""
         return self.db.execute(GET_USER, {"id": user_id})
