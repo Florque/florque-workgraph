@@ -28,26 +28,18 @@ class VisionRepository:
         return {"workspace_id": self.workspace_id, **kwargs}
 
     def create(self, vision_data: dict) -> list[Any]:
-        """Create a Vision node."""
+        """Create a Vision node and atomically link it to a Project."""
         
         project_id = vision_data.get("project_id")
         if not project_id:
             raise ValueError("project_id is required to create a Vision.")
             
         # Ensure 'archived' parameter is present, defaulting to False
-        if "archived" not in vision_data:
-            vision_data["archived"] = False
+        vision_data.setdefault("archived", False)
             
-        rows = self.db.execute_write(CREATE_VISION, {**vision_data, "workspace_id": self.workspace_id})
-        
-        vision_id = vision_data.get("id")
-        if vision_id:
-            try:
-                self.db.execute_write(CREATE_VISION_IN_PROJECT, {"vision_id": vision_id, "project_id": project_id, "workspace_id": self.workspace_id})
-            except Exception:
-                pass
-                
-        return rows
+        params = self._p(**vision_data)
+        return self.db.execute_write(CREATE_VISION_IN_PROJECT, params)
+
 
     def update(self, vision_id: str, updates: dict) -> list[Any]:
         """Update a Vision node."""

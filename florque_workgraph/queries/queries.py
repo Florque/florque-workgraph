@@ -174,17 +174,28 @@ MATCH (w:Workspace {id: $workspace_id})
 MERGE (p)-[:IN_WORKSPACE]->(w)
 """
 
+CREATE_VISION_IN_PROJECT = """
+MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})
+CREATE (v:Vision {
+    id: $id,
+    title: $title,
+    description: $description,
+    project_id: $project_id,
+    workspace_id: $workspace_id,
+    archived: coalesce($archived, false),
+    created_at: datetime(),
+    updated_at: datetime()
+})
+MERGE (v)-[:IN_PROJECT]->(p)
+RETURN v
+"""
+
 CREATE_IN_PROJECT = """
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
 MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})
 MERGE (t)-[:IN_PROJECT]->(p)
 """
 
-CREATE_VISION_IN_PROJECT = """
-MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})
-MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})
-MERGE (v)-[:IN_PROJECT]->(p)
-"""
 
 CREATE_SUBTASK = """
 MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})
