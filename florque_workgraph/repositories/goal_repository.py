@@ -33,6 +33,7 @@ class GoalRepository:
         params = {**goal_data, "strategy_id": strategy_id, "workspace_id": self.workspace_id}
         return self.db.execute_write(CREATE_GOAL_TRACKING_STRATEGY, params)
 
+
     def update(self, goal_id: str, updates: dict) -> list[Any]:
         """Update a Goal node."""
         params = {

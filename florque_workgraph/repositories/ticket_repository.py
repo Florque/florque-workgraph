@@ -6,7 +6,6 @@ from ..queries.queries import (
     DELETE_TICKET,
     GET_TICKET,
     GET_ALL_TICKETS,
-    CREATE_IN_PROJECT,
     CREATE_SUBTASK,
     DELETE_SUBTASK,
     GET_SUBTASKS,
@@ -28,16 +27,12 @@ from ..queries.queries import (
     GET_ALL_SUBTICKETS_FOR_TICKET,
     GET_TICKET_EDGES_BY_TYPE,
     UPDATE_TICKET,
-    DELETE_IN_PROJECT_BY_TICKET,
     CREATE_EXECUTES,
     DELETE_EXECUTES,
     GET_TICKET_GOALS,
     GET_ANCESTORS_WITH_GOALS,
     SET_TICKET_ARCHIVED_STATUS,
     SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
-    LINK_TICKET_TO_REACTIVE_INITIATIVE,
-    CHANGE_TICKET_REACTIVE_INITIATIVE,
-    CREATE_TICKET_EXECUTING_REACTIVE_INITIATIVE,
 )
 
 
@@ -60,22 +55,9 @@ class TicketRepository:
     # ── Node CRUD ──────────────────────────────────────────────────────────────
 
     def create(self, ticket_data: dict) -> list[Any]:
-        """Create a Ticket node. Dispatches to a specific creation method based on the parent type."""
-        project_id = ticket_data.get("project_id")
-        if not project_id:
-            raise ValueError("A ticket must be associated with a project.")
-
+        """Create a Ticket node."""
         parent_ticket_id = ticket_data.get("parent_id")
         goal_id = ticket_data.get("goal_id")
-        reactive_initiative_id = ticket_data.get("reactive_initiative_id")
-        
-        # Dispatch to the appropriate creator method
-        if reactive_initiative_id:
-            return self.create_ticket_executing_reactive_initiative(ticket_data)
-        
-        # --- Fallback to original logic for other parent types ---
-        if not parent_ticket_id and not goal_id:
-            raise ValueError("A ticket must have either a goal, a parent ticket, or a reactive initiative.")
 
         params = self._p(**ticket_data)
         params.setdefault("archived", None)
@@ -84,12 +66,6 @@ class TicketRepository:
         rows = self.db.execute_write(CREATE_TICKET, params)
 
         if ticket_id:
-            # Create relationship to project
-            try:
-                self.db.execute_write(CREATE_IN_PROJECT, self._p(ticket_id=ticket_id, project_id=project_id))
-            except Exception:
-                pass
-
             # Create relationship to parent ticket or goal
             if parent_ticket_id:
                 try:
@@ -103,21 +79,8 @@ class TicketRepository:
                     pass
         return rows
 
-    def create_ticket_executing_reactive_initiative(self, ticket_data: dict) -> list[Any]:
-        """Creates a Ticket and atomically links it to a ReactiveInitiative."""
-        required_keys = ["id", "title", "project_id", "reactive_initiative_id"]
-        if not all(key in ticket_data for key in required_keys):
-            raise ValueError(f"Missing one of required keys for ticket creation: {required_keys}")
-        
-        params = self._p(**ticket_data)
-        params.setdefault("status", "todo")
-        params.setdefault("description", "")
-        params.setdefault("archived", None)
-        
-        return self.db.execute_write(CREATE_TICKET_EXECUTING_REACTIVE_INITIATIVE, params)
-
     def update(self, ticket_id: str, updates: dict) -> list[Any]:
-        """Update fields on a Ticket node. `updates` may include title, description, status, project_id.
+        """Update fields on a Ticket node. `updates` may include title, description, status.
 
         Memgraph requires referenced parameters to be present even when NULL, so ensure
         all expected params exist (set to None when not provided).
@@ -128,27 +91,9 @@ class TicketRepository:
             "title": updates.get("title", None),
             "description": updates.get("description", None),
             "status": updates.get("status", None),
-            "project_id": updates.get("project_id", None),
             "archived": updates.get("archived", None),
         }
         rows = self.db.execute_write(UPDATE_TICKET, params)
-
-        # If project_id explicitly provided in updates, adjust IN_PROJECT relations
-        if "project_id" in updates:
-            # remove any existing IN_PROJECT rels for this ticket
-            try:
-                self.db.execute_write(DELETE_IN_PROJECT_BY_TICKET, {"ticket_id": ticket_id, "workspace_id": self.workspace_id})
-            except Exception:
-                pass
-
-            # create new IN_PROJECT relation if project_id is not null/empty
-            new_proj = updates.get("project_id")
-            if new_proj:
-                try:
-                    self.db.execute_write(CREATE_IN_PROJECT, {"ticket_id": ticket_id, "project_id": new_proj, "workspace_id": self.workspace_id})
-                except Exception:
-                    pass
-
         return rows
 
 

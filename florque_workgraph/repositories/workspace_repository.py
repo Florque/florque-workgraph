@@ -115,8 +115,8 @@ class WorkspaceRepository:
 
     # ── Scoped getters ────────────────────────────────────────────────────────
 
-    def get_projects(self, workspace_id: str) -> list[Any]:
-        """Return all Project nodes that belong to this workspace."""
+    def get_project_roots(self, workspace_id: str) -> list[Any]:
+        """Return all Project Root nodes that belong to this workspace."""
         return self.db.execute(GET_PROJECTS_FOR_WORKSPACE, {"workspace_id": workspace_id})
 
     def get_tickets(self, workspace_id: str) -> list[Any]:

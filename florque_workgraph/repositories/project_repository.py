@@ -2,22 +2,21 @@ from typing import Any
 
 from ..session import GraphManager
 from ..queries.queries import (
-    CREATE_PROJECT,
-    DELETE_PROJECT,
-    GET_PROJECT,
-    GET_ALL_PROJECTS,
-    CREATE_IN_WORKSPACE,
-    DELETE_IN_WORKSPACE,
-    CREATE_IN_PROJECT,
-    DELETE_IN_PROJECT,
-    GET_TICKETS_FOR_PROJECT,
-    UPDATE_PROJECT,
+    CREATE_STRATEGY,
+    DELETE_STRATEGY,
+    GET_PROJECT_ROOT,
+    GET_ALL_PROJECT_ROOTS,
+    ADD_TICKET_TO_PROJECT_ROOT,
+    REMOVE_TICKET_FROM_PROJECT_ROOT,
+    GET_TICKETS_FOR_PROJECT_ROOT,
+    UPDATE_STRATEGY,
 )
 
 
-class ProjectRepository:
+class ProjectRootRepository:
     """
-    Workspace-scoped domain operations for Project nodes and their relationships.
+    Workspace-scoped domain operations for Project Root nodes and their relationships.
+    A project root is a Strategy node with is_project = true.
 
     Every method automatically constrains queries to self.workspace_id so that
     no operation can cross tenant boundaries even when a direct node ID is given.
@@ -34,57 +33,47 @@ class ProjectRepository:
     # ── Node CRUD ──────────────────────────────────────────────────────────────
 
     def create(self, project_data: dict) -> list[Any]:
-        """Create a Project node. project_data must contain: id, name, description.
-        workspace_id is always set from the repository context."""
-        return self.db.execute_write(CREATE_PROJECT, {**project_data, "workspace_id": self.workspace_id})
+        """Create a Project Root (Strategy node). project_data must contain: id, title, description, vision."""
+        return self.db.execute_write(
+            CREATE_STRATEGY, {**project_data, "workspace_id": self.workspace_id, "is_project": True, "archived": False}
+        )
 
     def update(self, project_id: str, updates: dict) -> list[Any]:
-        """Update fields on a Project node. `updates` may include name, description.
-
-        Memgraph requires referenced parameters to be present even when NULL, so ensure
-        all expected params exist (set to None when not provided).
-        """
+        """Update fields on a Project Root (Strategy) node. `updates` may include title, description, vision."""
         params = {
             "id": project_id,
             "workspace_id": self.workspace_id,
-            "name": updates.get("name", None),
+            "title": updates.get("title", None),
             "description": updates.get("description", None),
+            "vision": updates.get("vision", None),
+            "is_project": True,
+            "archived": None,
         }
-        return self.db.execute_write(UPDATE_PROJECT, params)
+        return self.db.execute_write(UPDATE_STRATEGY, params)
 
     def get(self, project_id: str) -> list[Any]:
-        """Return a single Project node by id, scoped to this workspace."""
-        return self.db.execute(GET_PROJECT, self._p(id=project_id))
+        """Return a single Project Root node by id, scoped to this workspace."""
+        return self.db.execute(GET_PROJECT_ROOT, self._p(id=project_id))
 
     def get_all(self) -> list[Any]:
-        """Return all Project nodes in this workspace."""
-        return self.db.execute(GET_ALL_PROJECTS, self._p())
+        """Return all Project Root nodes in this workspace."""
+        return self.db.execute(GET_ALL_PROJECT_ROOTS, self._p())
 
     def delete(self, project_id: str) -> None:
-        """Detach-delete a Project node within this workspace."""
-        self.db.execute_write(DELETE_PROJECT, self._p(id=project_id))
-
-    # ── Workspace membership ──────────────────────────────────────────────────
-
-    def add_to_workspace(self, project_id: str) -> None:
-        """Create an IN_WORKSPACE edge from this project to its workspace."""
-        self.db.execute_write(CREATE_IN_WORKSPACE, self._p(project_id=project_id))
-
-    def remove_from_workspace(self, project_id: str) -> None:
-        """Remove the IN_WORKSPACE edge from this project to its workspace."""
-        self.db.execute_write(DELETE_IN_WORKSPACE, self._p(project_id=project_id))
+        """Detach-delete a Project Root node within this workspace."""
+        self.db.execute_write(DELETE_STRATEGY, self._p(id=project_id))
 
     # ── Ticket membership ─────────────────────────────────────────────────────
 
     def add_ticket(self, ticket_id: str, project_id: str) -> None:
-        """Create an IN_PROJECT edge from a ticket to this project."""
-        self.db.execute_write(CREATE_IN_PROJECT, self._p(ticket_id=ticket_id, project_id=project_id))
+        """Create an INITIATES edge from a ticket to this project root."""
+        self.db.execute_write(ADD_TICKET_TO_PROJECT_ROOT, self._p(ticket_id=ticket_id, strategy_id=project_id))
 
     def remove_ticket(self, ticket_id: str, project_id: str) -> None:
-        """Remove the IN_PROJECT edge from a ticket to this project."""
-        self.db.execute_write(DELETE_IN_PROJECT, self._p(ticket_id=ticket_id, project_id=project_id))
+        """Remove the INITIATES edge from a ticket to this project root."""
+        self.db.execute_write(REMOVE_TICKET_FROM_PROJECT_ROOT, self._p(ticket_id=ticket_id, strategy_id=project_id))
 
     def get_tickets(self, project_id: str, include_archived: bool = False) -> list[Any]:
-        """Return all Ticket nodes that belong to this project, within this workspace."""
-        params = self._p(project_id=project_id, include_archived=include_archived)
-        return self.db.execute(GET_TICKETS_FOR_PROJECT, params)
+        """Return all Ticket nodes that belong to this project root, within this workspace."""
+        params = self._p(strategy_id=project_id, include_archived=include_archived)
+        return self.db.execute(GET_TICKETS_FOR_PROJECT_ROOT, params)

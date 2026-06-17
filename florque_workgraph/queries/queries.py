@@ -18,24 +18,12 @@ CREATE (w:Workspace {
 RETURN w
 """
 
-CREATE_PROJECT = """
-CREATE (p:Project {
-    id: $id,
-    name: $name,
-    description: $description,
-    workspace_id: $workspace_id,
-    created_at: datetime()
-})
-RETURN p
-"""
-
 CREATE_TICKET = """
 CREATE (t:Ticket {
     id: $id,
     title: $title,
     description: $description,
     status: $status,
-    project_id: $project_id,
     workspace_id: $workspace_id,
     archived: coalesce($archived, false),
     created_at: datetime(),
@@ -67,45 +55,18 @@ CREATE (u:User {
 RETURN u
 """
 
-CREATE_VISION = """
-CREATE (v:Vision {
-    id: $id,
-    title: $title,
-    description: $description,
-    project_id: $project_id,
-    workspace_id: $workspace_id,
-    archived: coalesce($archived, false),
-    created_at: datetime(),
-    updated_at: datetime()
-})
-RETURN v
-"""
-
 CREATE_STRATEGY = """
 CREATE (s:Strategy {
     id: $id,
     title: $title,
     description: $description,
     workspace_id: $workspace_id,
+    vision: $vision,
+    is_project: coalesce($is_project, false),
     archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
 })
-RETURN s
-"""
-
-CREATE_STRATEGY_PURSUES_VISION = """
-MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})
-CREATE (s:Strategy {
-    id: $id,
-    title: $title,
-    description: $description,
-    workspace_id: $workspace_id,
-    archived: coalesce($archived, false),
-    created_at: datetime(),
-    updated_at: datetime()
-})
-CREATE (s)-[:PURSUES]->(v)
 RETURN s
 """
 
@@ -155,11 +116,9 @@ RETURN t
 # ── Node Deletion ──────────────────────────────────────────────────────────────
 
 DELETE_WORKSPACE = "MATCH (w:Workspace {id: $id}) DETACH DELETE w"
-DELETE_PROJECT = "MATCH (p:Project {id: $id, workspace_id: $workspace_id}) DETACH DELETE p"
 DELETE_TICKET = "MATCH (t:Ticket {id: $id, workspace_id: $workspace_id}) DETACH DELETE t"
 DELETE_TIMEBOX = "MATCH (tb:Timebox {id: $id, workspace_id: $workspace_id}) DETACH DELETE tb"
 DELETE_USER = "MATCH (u:User {id: $id}) DETACH DELETE u"
-DELETE_VISION = "MATCH (v:Vision {id: $id, workspace_id: $workspace_id}) DETACH DELETE v"
 DELETE_STRATEGY = "MATCH (s:Strategy {id: $id, workspace_id: $workspace_id}) DETACH DELETE s"
 DELETE_GOAL = "MATCH (g:Goal {id: $id, workspace_id: $workspace_id}) DETACH DELETE g"
 
@@ -168,34 +127,11 @@ DELETE_TENANT = "MATCH (t:Tenant {id: $id}) DETACH DELETE t"
 
 # ── Edge Creation ──────────────────────────────────────────────────────────────
 
-CREATE_IN_WORKSPACE = """
-MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})
-MATCH (w:Workspace {id: $workspace_id})
-MERGE (p)-[:IN_WORKSPACE]->(w)
-"""
-
-CREATE_VISION_IN_PROJECT = """
-MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})
-CREATE (v:Vision {
-    id: $id,
-    title: $title,
-    description: $description,
-    project_id: $project_id,
-    workspace_id: $workspace_id,
-    archived: coalesce($archived, false),
-    created_at: datetime(),
-    updated_at: datetime()
-})
-MERGE (v)-[:IN_PROJECT]->(p)
-RETURN v
-"""
-
-CREATE_IN_PROJECT = """
+ADD_TICKET_TO_PROJECT_ROOT = """
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
-MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})
-MERGE (t)-[:IN_PROJECT]->(p)
+MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id, is_project: true})
+MERGE (s)-[:INITIATES]->(t)
 """
-
 
 CREATE_SUBTASK = """
 MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})
@@ -234,12 +170,6 @@ MATCH (t2:Ticket {id: $related_id, workspace_id: $workspace_id})
 MERGE (t1)-[:RELATES_TO]->(t2)
 """
 
-CREATE_PURSUES = """
-MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
-MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})
-MERGE (s)-[:PURSUES]->(v)
-"""
-
 CREATE_TRACKS_VIA = """
 MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
 MATCH (g:Goal {id: $goal_id, workspace_id: $workspace_id})
@@ -251,12 +181,6 @@ MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
 MATCH (g:Goal {id: $goal_id, workspace_id: $workspace_id})
 MERGE (t)-[r:EXECUTES]->(g)
 SET r.archived = coalesce($archived, false)
-"""
-
-LINK_TICKET_TO_REACTIVE_INITIATIVE = """
-    MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
-    MATCH (ri:ReactiveInitiative {id: $reactive_initiative_id, workspace_id: $workspace_id})
-    MERGE (t)-[:EXECUTES]->(ri)
 """
 
 # ── Membership ─────────────────────────────────────────────────────────────────
@@ -294,8 +218,8 @@ SET m.user_id = u.id
 MERGE (u)-[:HAS_MEMBERSHIP]->(m)
 """
 
-# Create edge between User and Membership for attached memberships (those with a valid user_id) that may have been created after the user was created. 
-# This ensures that even if detached memberships are created first, they will be linked to the user once the user is created. 
+# Create edge between User and Membership for attached memberships (those with a valid user_id) that may have been created after the user was created.
+# This ensures that even if detached memberships are created first, they will be linked to the user once the user is created.
 # Caller should run this before querying for a user's workspaces to ensure all memberships are properly linked.
 CREATE_HAS_MEMBERSHIP = """
 MATCH (u:User {id: $user_id})
@@ -325,18 +249,8 @@ DELETE rel
 
 # ── Edge Deletion ──────────────────────────────────────────────────────────────
 
-DELETE_IN_WORKSPACE = """
-MATCH (p:Project {id: $project_id, workspace_id: $workspace_id})-[r:IN_WORKSPACE]->(w:Workspace {id: $workspace_id})
-DELETE r
-"""
-
-DELETE_IN_PROJECT = """
-MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:IN_PROJECT]->(p:Project {id: $project_id, workspace_id: $workspace_id})
-DELETE r
-"""
-
-DELETE_VISION_IN_PROJECT = """
-MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})-[r:IN_PROJECT]->(p:Project {id: $project_id, workspace_id: $workspace_id})
+REMOVE_TICKET_FROM_PROJECT_ROOT = """
+MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id, is_project: true})-[r:INITIATES]->(t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
 DELETE r
 """
 
@@ -360,11 +274,6 @@ MATCH (t1:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:RELATES_TO]->
 DELETE r
 """
 
-DELETE_PURSUES = """
-MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[r:PURSUES]->(v:Vision {id: $vision_id, workspace_id: $workspace_id})
-DELETE r
-"""
-
 DELETE_TRACKS_VIA = """
 MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[r:TRACKS_VIA]->(g:Goal {id: $goal_id, workspace_id: $workspace_id})
 DELETE r
@@ -373,11 +282,6 @@ DELETE r
 DELETE_EXECUTES = """
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:EXECUTES]->(g:Goal {id: $goal_id, workspace_id: $workspace_id})
 DELETE r
-"""
-
-CHANGE_TICKET_REACTIVE_INITIATIVE = """
-    MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:EXECUTES]->(:ReactiveInitiative)
-    DELETE r
 """
 
 # ── Node Getters ──────────────────────────────────────────────────────────────
@@ -389,8 +293,8 @@ MATCH (u:User {id: $user_id})-[:HAS_MEMBERSHIP]->(m:Membership)-[:IN_WORKSPACE]-
 RETURN w
 """
 
-GET_PROJECT = "MATCH (p:Project {id: $id, workspace_id: $workspace_id}) RETURN p"
-GET_ALL_PROJECTS = "MATCH (p:Project {workspace_id: $workspace_id}) RETURN p"
+GET_PROJECT_ROOT = "MATCH (s:Strategy {id: $id, workspace_id: $workspace_id, is_project: true}) RETURN s"
+GET_ALL_PROJECT_ROOTS = "MATCH (s:Strategy {workspace_id: $workspace_id, is_project: true}) RETURN s"
 
 GET_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
@@ -420,13 +324,6 @@ GET_USER_BY_EMAIL = "MATCH (u:User {email: $email}) RETURN u"
 GET_WORKSPACE_USERS = """
 MATCH (u:User)-[:HAS_MEMBERSHIP]->(m:Membership)-[:IN_WORKSPACE]->(w:Workspace {id: $workspace_id})
 RETURN u
-"""
-
-GET_VISION = "MATCH (v:Vision {id: $id, workspace_id: $workspace_id}) RETURN v"
-GET_ALL_VISIONS = """
-MATCH (v:Vision {workspace_id: $workspace_id})
-WHERE $include_archived OR (v.archived IS NULL OR v.archived = false)
-RETURN v
 """
 
 GET_STRATEGY = "MATCH (s:Strategy {id: $id, workspace_id: $workspace_id}) RETURN s"
@@ -502,18 +399,12 @@ RETURN t
 """
 
 GET_PROJECTS_FOR_WORKSPACE = """
-MATCH (p:Project)-[:IN_WORKSPACE]->(w:Workspace {id: $workspace_id})
-RETURN p
+MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})
+RETURN s
 """
 
-GET_PROJECT_VISIONS = """
-MATCH (v:Vision {workspace_id: $workspace_id})-[:IN_PROJECT]->(p:Project {id: $project_id, workspace_id: $workspace_id})
-WHERE $include_archived OR (v.archived IS NULL OR v.archived = false)
-RETURN v
-"""
-
-GET_TICKETS_FOR_PROJECT = """
-MATCH (t:Ticket {workspace_id: $workspace_id})-[:IN_PROJECT]->(p:Project {id: $project_id, workspace_id: $workspace_id})
+GET_TICKETS_FOR_PROJECT_ROOT = """
+MATCH (t:Ticket {workspace_id: $workspace_id})<-[:INITIATES]-(s:Strategy {id: $strategy_id, workspace_id: $workspace_id, is_project: true})
 WHERE $include_archived OR (t.archived IS NULL OR t.archived = false)
 RETURN t, null AS parent_id
 """
@@ -521,17 +412,6 @@ RETURN t, null AS parent_id
 GET_TICKETS_FOR_WORKSPACE = """
 MATCH (t:Ticket {workspace_id: $workspace_id})
 RETURN t, null AS parent_id
-"""
-
-GET_STRATEGY_VISION = """
-MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[:PURSUES]->(v:Vision)
-RETURN v
-"""
-
-GET_VISION_STRATEGIES = """
-MATCH (s:Strategy)-[:PURSUES]->(v:Vision {id: $vision_id, workspace_id: $workspace_id})
-WHERE $include_archived OR (s.archived IS NULL OR s.archived = false)
-RETURN s
 """
 
 GET_STRATEGY_GOALS = """
@@ -555,6 +435,22 @@ MATCH (t:Ticket)-[:EXECUTES]->(g:Goal {id: $goal_id, workspace_id: $workspace_id
 RETURN t
 """
 
+ADD_TICKET_TO_STRATEGY = """
+MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
+MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+MERGE (t)-[:REQUIRES_STRATEGY]->(s)
+"""
+
+REMOVE_TICKET_FROM_STRATEGY = """
+MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:REQUIRES_STRATEGY]->(s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+DELETE r
+"""
+
+GET_TICKETS_FOR_STRATEGY = """
+MATCH (t:Ticket {workspace_id: $workspace_id})-[:REQUIRES_STRATEGY]->(s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+RETURN t
+"""
+
 UPDATE_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END |
@@ -566,9 +462,6 @@ FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END |
 FOREACH (_ IN CASE WHEN $status IS NOT NULL THEN [1] ELSE [] END |
     SET t.status = $status
 )
-FOREACH (_ IN CASE WHEN $project_id IS NOT NULL THEN [1] ELSE [] END |
-    SET t.project_id = $project_id
-)
 FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END |
     SET t.archived = $archived
 )
@@ -576,48 +469,12 @@ SET t.updated_at = datetime()
 RETURN t
 """
 
-CREATE_TICKET_EXECUTING_REACTIVE_INITIATIVE = """
-    MATCH (ri:ReactiveInitiative {id: $reactive_initiative_id, workspace_id: $workspace_id})
-    CREATE (t:Ticket {
-        id: $id,
-        title: $title,
-        description: $description,
-        status: $status,
-        project_id: $project_id,
-        workspace_id: $workspace_id,
-        archived: coalesce($archived, false),
-        created_at: datetime(),
-        updated_at: datetime()
-    })
-    CREATE (t)-[:EXECUTES]->(ri)
-    RETURN t
-"""
-
-UPDATE_PROJECT = """
-MATCH (p:Project {id: $id, workspace_id: $workspace_id})
-FOREACH (_ IN CASE WHEN $name IS NOT NULL THEN [1] ELSE [] END |
-    SET p.name = $name
-)
-FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END |
-    SET p.description = $description
-)
-RETURN p
-"""
-
-UPDATE_VISION = """
-MATCH (v:Vision {id: $id, workspace_id: $workspace_id})
-FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET v.title = $title)
-FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET v.description = $description)
-FOREACH (_ IN CASE WHEN $project_id IS NOT NULL THEN [1] ELSE [] END | SET v.project_id = $project_id)
-FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET v.archived = $archived)
-SET v.updated_at = datetime()
-RETURN v
-"""
-
 UPDATE_STRATEGY = """
 MATCH (s:Strategy {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET s.title = $title)
 FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET s.description = $description)
+FOREACH (_ IN CASE WHEN $vision IS NOT NULL THEN [1] ELSE [] END | SET s.vision = $vision)
+FOREACH (_ IN CASE WHEN $is_project IS NOT NULL THEN [1] ELSE [] END | SET s.is_project = $is_project)
 FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET s.archived = $archived)
 SET s.updated_at = datetime()
 RETURN s
@@ -630,16 +487,6 @@ FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET g.de
 FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET g.archived = $archived)
 SET g.updated_at = datetime()
 RETURN g
-"""
-
-DELETE_IN_PROJECT_BY_TICKET = """
-MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[r:IN_PROJECT]->(p:Project {workspace_id: $workspace_id})
-DELETE r
-"""
-
-DELETE_IN_PROJECT_BY_VISION = """
-MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})-[r:IN_PROJECT]->(p:Project {workspace_id: $workspace_id})
-DELETE r
 """
 
 # ── Combined Getters ──────────────────────────────────────────────────────────
@@ -773,11 +620,9 @@ CONSTRAINTS = [
     "CREATE CONSTRAINT ON (tb:Timebox) ASSERT tb.id IS UNIQUE",
     "CREATE CONSTRAINT ON (t:Tenant) ASSERT t.id IS UNIQUE",
     "CREATE CONSTRAINT ON (w:Workspace) ASSERT w.id IS UNIQUE",
-    "CREATE CONSTRAINT ON (p:Project) ASSERT p.id IS UNIQUE",
     "CREATE CONSTRAINT ON (r:Role) ASSERT r.id IS UNIQUE",
     "CREATE CONSTRAINT ON (c:Capability) ASSERT c.id IS UNIQUE",
     "CREATE CONSTRAINT ON (m:Membership) ASSERT m.id IS UNIQUE",
-    "CREATE CONSTRAINT ON (v:Vision) ASSERT v.id IS UNIQUE",
     "CREATE CONSTRAINT ON (s:Strategy) ASSERT s.id IS UNIQUE",
     "CREATE CONSTRAINT ON (g:Goal) ASSERT g.id IS UNIQUE",
     "CREATE CONSTRAINT ON (l:Label) ASSERT l.id IS UNIQUE",
@@ -811,11 +656,6 @@ ORDER BY distance ASC
 GET_GOAL_TRACKED_BY_STRATEGY = """
 MATCH (s:Strategy {workspace_id: $workspace_id})-[:TRACKS_VIA]->(g:Goal {id: $id, workspace_id: $workspace_id})
 RETURN s
-"""
-
-GET_STRATEGY_PURSUES_VISION = """
-MATCH (s:Strategy {id: $id, workspace_id: $workspace_id})-[:PURSUES]->(v:Vision {workspace_id: $workspace_id})
-RETURN v
 """
 
 # ── Archiving ──────────────────────────────────────────────────────────────────
@@ -856,12 +696,6 @@ FOREACH(st IN all_subtickets |
 FOREACH(rel IN all_rels |
     SET rel.archived = archived_status
 )
-"""
-
-SET_VISION_ARCHIVED_STATUS = """
-MATCH (v:Vision {id: $vision_id, workspace_id: $workspace_id})
-SET v.archived = $archived, v.updated_at = datetime()
-RETURN v
 """
 
 SET_STRATEGY_ARCHIVED_STATUS = """
