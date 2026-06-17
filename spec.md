@@ -45,7 +45,6 @@
 ### Strategy Nodes
 
 * **`is_project` (Boolean):** If `true`, acts as a project root (bookmark).
-* **`vision` (String):** High-level context.
 * **`workspace_id` (UUID):** Mandatory safety anchor.
 
 ### Ticket Roles & Execution Modes

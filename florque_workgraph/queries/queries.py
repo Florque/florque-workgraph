@@ -61,7 +61,6 @@ CREATE (s:Strategy {
     title: $title,
     description: $description,
     workspace_id: $workspace_id,
-    vision: $vision,
     is_project: coalesce($is_project, false),
     archived: coalesce($archived, false),
     created_at: datetime(),
@@ -473,7 +472,6 @@ UPDATE_STRATEGY = """
 MATCH (s:Strategy {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END | SET s.title = $title)
 FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END | SET s.description = $description)
-FOREACH (_ IN CASE WHEN $vision IS NOT NULL THEN [1] ELSE [] END | SET s.vision = $vision)
 FOREACH (_ IN CASE WHEN $is_project IS NOT NULL THEN [1] ELSE [] END | SET s.is_project = $is_project)
 FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END | SET s.archived = $archived)
 SET s.updated_at = datetime()

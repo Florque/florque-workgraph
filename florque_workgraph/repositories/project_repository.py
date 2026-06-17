@@ -33,19 +33,17 @@ class ProjectRootRepository:
     # ── Node CRUD ──────────────────────────────────────────────────────────────
 
     def create(self, project_data: dict) -> list[Any]:
-        """Create a Project Root (Strategy node). project_data must contain: id, title, description, vision."""
-        return self.db.execute_write(
-            CREATE_STRATEGY, {**project_data, "workspace_id": self.workspace_id, "is_project": True, "archived": False}
-        )
+        """Create a Project Root (Strategy node). project_data must contain: id, title, description."""
+        params = self._p(**project_data, is_project=True)
+        return self.db.execute_write(CREATE_STRATEGY, params)
 
     def update(self, project_id: str, updates: dict) -> list[Any]:
-        """Update fields on a Project Root (Strategy) node. `updates` may include title, description, vision."""
+        """Update fields on a Project Root (Strategy) node. `updates` may include title, description."""
         params = {
             "id": project_id,
             "workspace_id": self.workspace_id,
             "title": updates.get("title", None),
             "description": updates.get("description", None),
-            "vision": updates.get("vision", None),
             "is_project": True,
             "archived": None,
         }

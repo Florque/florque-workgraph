@@ -31,11 +31,7 @@ class StrategyRepository:
 
     def create(self, strategy_data: dict) -> list[Any]:
         """Create a Strategy node."""
-        if "archived" not in strategy_data:
-            strategy_data["archived"] = False
-        if "is_project" not in strategy_data:
-            strategy_data["is_project"] = False
-        params = {**strategy_data, "workspace_id": self.workspace_id}
+        params = self._p(**strategy_data)
         return self.db.execute_write(CREATE_STRATEGY, params)
 
     def update(self, strategy_id: str, updates: dict) -> list[Any]:
@@ -45,7 +41,6 @@ class StrategyRepository:
             "workspace_id": self.workspace_id,
             "title": updates.get("title"),
             "description": updates.get("description"),
-            "vision": updates.get("vision"),
             "is_project": updates.get("is_project"),
             "archived": updates.get("archived"),
         }
