@@ -77,7 +77,6 @@ class WorkspaceRepository:
             "name": "Admin",
             "scope": "workspace",
             "workspace_id": workspace_id,
-            "project_id": None,
         }
         self.db.execute_write(CREATE_ROLE, role_data)
 
@@ -115,7 +114,7 @@ class WorkspaceRepository:
 
     # ── Scoped getters ────────────────────────────────────────────────────────
 
-    def get_project_roots(self, workspace_id: str) -> list[Any]:
+    def get_projects(self, workspace_id: str) -> list[Any]:
         """Return all Project Root nodes that belong to this workspace."""
         return self.db.execute(GET_PROJECTS_FOR_WORKSPACE, {"workspace_id": workspace_id})
 

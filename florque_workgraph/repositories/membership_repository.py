@@ -68,17 +68,17 @@ class MembershipRepository:
         """Get all pending invitations (emails) for a workspace."""
         return self.db.execute(GET_PENDING_INVITATIONS, {"workspace_id": workspace_id})  
 
-    def get(self, membership_id: str) -> list[Any]:
+    def get(self, membership_id: str, workspace_id: str) -> list[Any]:
         """Get membership by id."""
-        return self.db.execute(GET_MEMBERSHIP, {"id": membership_id})
+        return self.db.execute(GET_MEMBERSHIP, {"id": membership_id, "workspace_id": workspace_id})
 
     def get_by_user_workspace(self, user_id: str, workspace_id: str) -> list[Any]:
         """Get membership by user/workspace pair."""
         return self.db.execute(GET_MEMBERSHIP_BY_USER_WORKSPACE, {"user_id": user_id, "workspace_id": workspace_id})
 
-    def delete(self, membership_id: str) -> None:
+    def delete(self, membership_id: str, workspace_id: str) -> None:
         """Detach-delete membership."""
-        self.db.execute_write(DELETE_MEMBERSHIP, {"id": membership_id})
+        self.db.execute_write(DELETE_MEMBERSHIP, {"id": membership_id, "workspace_id": workspace_id})
 
     # ── Roles ─────────────────────────────────────────────────────────────────
 

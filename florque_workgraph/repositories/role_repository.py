@@ -7,7 +7,6 @@ from ..queries.queries import (
     GET_ROLE,
     GET_ALL_ROLES,
     GET_WORKSPACE_ROLES,
-    GET_PROJECT_ROLES,
     CREATE_HAS_CAPABILITY,
     DELETE_HAS_CAPABILITY,
     GET_ROLE_CAPABILITIES,
@@ -46,7 +45,7 @@ class RoleRepository:
         """
         return self.db.execute_write(
             CREATE_ROLE,
-            {**role_data, "workspace_id": self.workspace_id, "project_id": role_data.get("project_id")},
+            {**role_data, "workspace_id": self.workspace_id},
         )
 
     def get(self, role_id: str) -> list[Any]:
@@ -60,10 +59,6 @@ class RoleRepository:
     def get_workspace_roles(self) -> list[Any]:
         """Return workspace-scoped Role nodes for this workspace."""
         return self.db.execute(GET_WORKSPACE_ROLES, self._p())
-
-    def get_project_roles(self, project_id: str) -> list[Any]:
-        """Return project-scoped Role nodes for the given project within this workspace."""
-        return self.db.execute(GET_PROJECT_ROLES, self._p(project_id=project_id))
 
     def delete(self, role_id: str) -> None:
         """Detach-delete a Role node within this workspace."""

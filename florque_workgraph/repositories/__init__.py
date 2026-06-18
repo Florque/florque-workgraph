@@ -2,7 +2,6 @@ from .ticket_repository import TicketRepository
 from .user_repository import UserRepository
 from .timebox_repository import TimeboxRepository
 from .workspace_repository import WorkspaceRepository
-from .project_repository import ProjectRootRepository
 from .role_repository import RoleRepository
 from .capability_repository import CapabilityRepository
 from .membership_repository import MembershipRepository
@@ -15,7 +14,6 @@ __all__ = [
     "UserRepository",
     "TimeboxRepository",
     "WorkspaceRepository",
-    "ProjectRootRepository",
     "RoleRepository",
     "CapabilityRepository",
     "MembershipRepository",

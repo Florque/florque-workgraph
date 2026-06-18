@@ -54,7 +54,7 @@ def test_membership_repository_methods(repos):
     role_repo.create({"id": "role-members", "name": "Member", "scope": "workspace"})
 
     membership_repo.create("u-member", "ws-members", membership_id="m-1")
-    assert _ids(membership_repo.get("m-1")) == ["m-1"]
+    assert _ids(membership_repo.get("m-1", "ws-members")) == ["m-1"]
     assert _ids(membership_repo.get_by_user_workspace("u-member", "ws-members")) == ["m-1"]
 
     membership_repo.add_role("m-1", "role-members", "ws-members")
@@ -63,5 +63,5 @@ def test_membership_repository_methods(repos):
     membership_repo.remove_role("m-1", "role-members", "ws-members")
     assert membership_repo.get_roles("m-1", "ws-members") == []
 
-    membership_repo.delete("m-1")
-    assert membership_repo.get("m-1") == []
+    membership_repo.delete("m-1", "ws-members")
+    assert membership_repo.get("m-1", "ws-members") == []

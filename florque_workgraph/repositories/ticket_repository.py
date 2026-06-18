@@ -226,12 +226,3 @@ class TicketRepository:
     def get_ancestors_with_goals(self, ticket_id: str) -> list[Any]:
         """Get ancestors of a ticket with their goals, ordered by distance."""
         return self.db.execute(GET_ANCESTORS_WITH_GOALS, self._p(ticket_id=ticket_id))
-
-    # ── Reactive Initiative ────────────────────────────────────────────────────
-
-    def change_reactive_initiative(self, ticket_id: str, new_reactive_initiative_id: str) -> None:
-        """Move a ticket to execute a different ReactiveInitiative."""
-        # Delete the old :EXECUTES relationship
-        self.db.execute_write(CHANGE_TICKET_REACTIVE_INITIATIVE, self._p(ticket_id=ticket_id))
-        # Create the new one
-        self.db.execute_write(LINK_TICKET_TO_REACTIVE_INITIATIVE, self._p(ticket_id=ticket_id, reactive_initiative_id=new_reactive_initiative_id))

@@ -23,9 +23,10 @@
 | Source Node | Target Node | Relationship | Logic |
 | --- | --- | --- | --- |
 | `:Strategy` | `:Ticket` | `INITIATES` | Strategy branches into an Initiative. |
-| `:Ticket` | `:Strategy` | `REQUIRES_STRATEGY` | Mandatory link for Creative/Initiative types. |
-| `:Ticket` | `:Ticket` | `EXECUTED_BY` | Fractal link: Parent ticket manages sub-tickets. |
-| `:Ticket` | `:Ticket` | `SCHEDULES` | Repeating ticket creates child Reactive tickets. |
+| `:Strategy` | `:Goal` | `HAS_GOAL` | Strategy measured by Goal. |
+| `:Ticket` | `:Strategy` | `REQUIRES_STRATEGY` | Mandatory link for Creative Ticket type. |
+| `:Ticket` | `:Ticket` | `SUBTASK` | Fractal link: Parent ticket manages sub-tickets. |
+| `:Ticket` | `:Goal` | `CONTRIBUTES_TO` | Ticket linked to the Goal it contributes to. |
 
 ### 3.2 Work graph units
 | Work Graph Unit | Source Node + Relevant Property | Cypher Implementation | Use Case |
@@ -37,7 +38,7 @@
 | Scheduled Initiative | :Ticket {exec_mode: 'scheduled'} | MATCH (s:Strategy {is_project:true})-[:INITIATES]->(t:Ticket {id: $ticket_id, exec_mode:'scheduled'}) | High-level scoping
 | Creative Task | :Ticket {exec_mode: 'creative'} | MATCH (t:Ticket {exec_mode:'creative'})-[:REQUIRES_STRATEGY]->(s:Strategy) | Deep/Focus work
 | Reactive Task | :Ticket {exec_mode: 'reactive'} | MATCH (t:Ticket {exec_mode:'reactive'}) | Flow & operational demand, final leaves
-| Scheduled Task | :Ticket {exec_mode: 'scheduled'} | MATCH (t:Ticket {exec_mode:'scheduled'})-[:SCHEDULES]->(sub:Ticket) | Routine & cadence work
+| Scheduled Task | :Ticket {exec_mode: 'scheduled'} | MATCH (t:Ticket {exec_mode:'scheduled'})-[:SUBTASK]->(sub:Ticket) | Routine & cadence work
 ---
 
 ## 4. Node Ontology & Rules

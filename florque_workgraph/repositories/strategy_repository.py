@@ -10,6 +10,7 @@ from ..queries.queries import (
     DELETE_TRACKS_VIA,
     GET_STRATEGY_GOALS,
     SET_STRATEGY_ARCHIVED_STATUS,
+    CREATE_TICKET,
     ADD_TICKET_TO_STRATEGY,
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
@@ -32,6 +33,8 @@ class StrategyRepository:
     def create(self, strategy_data: dict) -> list[Any]:
         """Create a Strategy node."""
         params = self._p(**strategy_data)
+        params.setdefault("archived", None)
+        params.setdefault("is_project", None)
         return self.db.execute_write(CREATE_STRATEGY, params)
 
     def update(self, strategy_id: str, updates: dict) -> list[Any]:
@@ -77,9 +80,19 @@ class StrategyRepository:
         """Get goals tracked via this strategy."""
         return self.db.execute(GET_STRATEGY_GOALS, self._p(strategy_id=strategy_id, include_archived=include_archived))
 
-    def add_ticket(self, strategy_id: str, ticket_id: str) -> None:
-        """Ticket REQUIRES_STRATEGY Strategy."""
-        self.db.execute_write(ADD_TICKET_TO_STRATEGY, self._p(strategy_id=strategy_id, ticket_id=ticket_id))
+    def create_ticket(self, strategy_id: str, ticket_data: dict) -> list[Any]:
+        """Create a Ticket node and link it to the Strategy simultaneously."""
+        params = self._p(**ticket_data)
+        params.setdefault("archived", None)
+        ticket_id = ticket_data.get("id")
+
+        rows = self.db.execute_write(CREATE_TICKET, params)
+
+        if ticket_id:
+            self.db.execute_write(
+                ADD_TICKET_TO_STRATEGY, self._p(strategy_id=strategy_id, ticket_id=ticket_id)
+            )
+        return rows
 
     def remove_ticket(self, strategy_id: str, ticket_id: str) -> None:
         """Remove Ticket REQUIRES_STRATEGY Strategy."""
