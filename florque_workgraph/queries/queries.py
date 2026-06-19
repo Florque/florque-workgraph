@@ -433,6 +433,11 @@ MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
 MERGE (t)-[:REQUIRES_STRATEGY]->(s)
 """
 
+GET_TICKET_STRATEGY = """
+MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:REQUIRES_STRATEGY]->(s:Strategy {workspace_id: $workspace_id})
+RETURN s
+"""
+
 UPDATE_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END |

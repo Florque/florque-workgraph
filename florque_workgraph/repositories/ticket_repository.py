@@ -35,6 +35,7 @@ from ..queries.queries import (
     SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
     CREATE_STRATEGY,
     CREATE_REQUIRES_STRATEGY,
+    GET_TICKET_STRATEGY,
 )
 
 
@@ -243,9 +244,10 @@ class TicketRepository:
         if not parent_ticket_result:
             raise ValueError(f"Parent ticket with id {parent_ticket_id} not found.")
         
-        parent_ticket = parent_ticket_result[0]['t']
+        parent_node = parent_ticket_result[0][0]
+        parent_type = parent_node.properties.get("type") if hasattr(parent_node, "properties") else parent_node.get("type")
         
-        if parent_ticket.get("type") not in ["reactive", "scheduled"]:
+        if parent_type not in ["reactive", "scheduled"]:
             raise ValueError("Subtasks can only be created for tickets of type 'reactive' or 'scheduled'.")
         
         subtask_data["parent_id"] = parent_ticket_id
@@ -257,9 +259,10 @@ class TicketRepository:
         if not ticket_result:
             raise ValueError(f"Ticket with id {ticket_id} not found.")
 
-        ticket = ticket_result[0]['t']
+        ticket_node = ticket_result[0][0]
+        ticket_type = ticket_node.properties.get("type") if hasattr(ticket_node, "properties") else ticket_node.get("type")
 
-        if ticket.get("type") != "creative":
+        if ticket_type != "creative":
             raise ValueError("Downstream strategies can only be created for tickets of type 'creative'.")
 
         strategy_repo = StrategyRepository(self.db, self.workspace_id)
@@ -272,3 +275,7 @@ class TicketRepository:
                 CREATE_REQUIRES_STRATEGY, self._p(ticket_id=ticket_id, strategy_id=strategy_id)
             )
         return rows
+
+    def get_ticket_strategy(self, ticket_id: str) -> list[Any]:
+        """Get the strategy that is required by this ticket."""
+        return self.db.execute(GET_TICKET_STRATEGY, self._p(ticket_id=ticket_id))
