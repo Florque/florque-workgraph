@@ -24,6 +24,7 @@ CREATE (t:Ticket {
     title: $title,
     description: $description,
     status: $status,
+    type: $type,
     workspace_id: $workspace_id,
     archived: coalesce($archived, false),
     created_at: datetime(),
@@ -426,6 +427,12 @@ MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[:INITIATES]-
 RETURN t
 """
 
+CREATE_REQUIRES_STRATEGY = """
+MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
+MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+MERGE (t)-[:REQUIRES_STRATEGY]->(s)
+"""
+
 UPDATE_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END |
@@ -436,6 +443,9 @@ FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END |
 )
 FOREACH (_ IN CASE WHEN $status IS NOT NULL THEN [1] ELSE [] END |
     SET t.status = $status
+)
+FOREACH (_ IN CASE WHEN $type IS NOT NULL THEN [1] ELSE [] END |
+    SET t.type = $type
 )
 FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END |
     SET t.archived = $archived

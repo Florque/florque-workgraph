@@ -1,5 +1,5 @@
 from typing import Any
-
+from .strategy_repository import StrategyRepository
 from ..session import GraphManager
 from ..queries.queries import (
     CREATE_TICKET,
@@ -33,6 +33,8 @@ from ..queries.queries import (
     GET_ANCESTORS_WITH_GOALS,
     SET_TICKET_ARCHIVED_STATUS,
     SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
+    CREATE_STRATEGY,
+    CREATE_REQUIRES_STRATEGY,
 )
 
 
@@ -58,6 +60,10 @@ class TicketRepository:
         """Create a Ticket node."""
         parent_ticket_id = ticket_data.get("parent_id")
         goal_id = ticket_data.get("goal_id")
+
+        ticket_type = ticket_data.get("type")
+        if ticket_type not in ["creative", "reactive", "scheduled"]:
+            raise ValueError("Ticket type must be one of 'creative', 'reactive', or 'scheduled'.")
 
         params = self._p(**ticket_data)
         params.setdefault("archived", None)
@@ -85,12 +91,16 @@ class TicketRepository:
         Memgraph requires referenced parameters to be present even when NULL, so ensure
         all expected params exist (set to None when not provided).
         """
+        if "type" in updates and updates["type"] and updates["type"] not in ["creative", "reactive", "scheduled"]:
+            raise ValueError("Ticket type must be one of 'creative', 'reactive', or 'scheduled'.")
+
         params = {
             "id": ticket_id,
             "workspace_id": self.workspace_id,
             "title": updates.get("title", None),
             "description": updates.get("description", None),
             "status": updates.get("status", None),
+            "type": updates.get("type", None),
             "archived": updates.get("archived", None),
         }
         rows = self.db.execute_write(UPDATE_TICKET, params)
@@ -226,3 +236,39 @@ class TicketRepository:
     def get_ancestors_with_goals(self, ticket_id: str) -> list[Any]:
         """Get ancestors of a ticket with their goals, ordered by distance."""
         return self.db.execute(GET_ANCESTORS_WITH_GOALS, self._p(ticket_id=ticket_id))
+
+    def create_subtask(self, parent_ticket_id: str, subtask_data: dict) -> list[Any]:
+        """Create a subtask for a ticket, with guards based on ticket type."""
+        parent_ticket_result = self.get(parent_ticket_id)
+        if not parent_ticket_result:
+            raise ValueError(f"Parent ticket with id {parent_ticket_id} not found.")
+        
+        parent_ticket = parent_ticket_result[0]['t']
+        
+        if parent_ticket.get("type") not in ["reactive", "scheduled"]:
+            raise ValueError("Subtasks can only be created for tickets of type 'reactive' or 'scheduled'.")
+        
+        subtask_data["parent_id"] = parent_ticket_id
+        return self.create(subtask_data)
+
+    def create_strategy(self, ticket_id: str, strategy_data: dict) -> list[Any]:
+        """Create a downstream strategy for a ticket, with guards based on ticket type."""
+        ticket_result = self.get(ticket_id)
+        if not ticket_result:
+            raise ValueError(f"Ticket with id {ticket_id} not found.")
+
+        ticket = ticket_result[0]['t']
+
+        if ticket.get("type") != "creative":
+            raise ValueError("Downstream strategies can only be created for tickets of type 'creative'.")
+
+        strategy_repo = StrategyRepository(self.db, self.workspace_id)
+        strategy_id = strategy_data.get("id")
+        
+        rows = strategy_repo.create(strategy_data)
+        
+        if strategy_id:
+            self.db.execute_write(
+                CREATE_REQUIRES_STRATEGY, self._p(ticket_id=ticket_id, strategy_id=strategy_id)
+            )
+        return rows
