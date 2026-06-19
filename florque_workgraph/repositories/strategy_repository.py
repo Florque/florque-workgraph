@@ -14,6 +14,7 @@ from ..queries.queries import (
     ADD_TICKET_TO_STRATEGY,
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
+    GET_STRATEGY_WORKGRAPH,
 )
 
 class StrategyRepository:
@@ -107,3 +108,7 @@ class StrategyRepository:
         return self.db.execute_write(
             SET_STRATEGY_ARCHIVED_STATUS, self._p(strategy_id=strategy_id, archived=archived)
         )
+
+    def get_strategy_workgraph(self, strategy_id: str) -> list[Any]:
+        """Get the full downstream workgraph for a strategy."""
+        return self.db.execute(GET_STRATEGY_WORKGRAPH, self._p(strategy_id=strategy_id))

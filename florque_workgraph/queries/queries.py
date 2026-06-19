@@ -169,6 +169,7 @@ MATCH (g:Goal {id: $goal_id, workspace_id: $workspace_id})
 MERGE (s)-[:TRACKS_VIA]->(g)
 """
 
+#TODO: possibly change executes to contributes
 CREATE_EXECUTES = """
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
 MATCH (g:Goal {id: $goal_id, workspace_id: $workspace_id})
@@ -624,6 +625,16 @@ ORDER BY distance ASC
 GET_GOAL_TRACKED_BY_STRATEGY = """
 MATCH (s:Strategy {workspace_id: $workspace_id})-[:TRACKS_VIA]->(g:Goal {id: $id, workspace_id: $workspace_id})
 RETURN s
+"""
+
+GET_STRATEGY_WORKGRAPH = """
+MATCH path = (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[:INITIATES|SUBTASK|REQUIRES_STRATEGY*0..]->(downstream)
+WHERE downstream.workspace_id = $workspace_id
+WITH COLLECT(DISTINCT downstream) AS nodes
+UNWIND nodes AS n
+OPTIONAL MATCH (n)-[r:INITIATES|SUBTASK|REQUIRES_STRATEGY]->(m)
+WHERE m IN nodes
+RETURN n AS node, r AS relationship, m AS related_node
 """
 
 # ── Archiving ──────────────────────────────────────────────────────────────────
