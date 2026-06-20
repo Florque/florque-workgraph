@@ -130,7 +130,7 @@ DELETE_TENANT = "MATCH (t:Tenant {id: $id}) DETACH DELETE t"
 CREATE_SUBTASK = """
 MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})
 MATCH (child:Ticket {id: $child_id, workspace_id: $workspace_id})
-MERGE (parent)-[r:SUBTASK]->(child)
+MERGE (parent)-[r:INITIATES]->(child)
 SET r.archived = coalesce($archived, false)
 """
 
@@ -245,7 +245,7 @@ DELETE rel
 # ── Edge Deletion ──────────────────────────────────────────────────────────────
 
 DELETE_SUBTASK = """
-MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})-[r:SUBTASK]->(child:Ticket {id: $child_id, workspace_id: $workspace_id})
+MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})-[r:SUBTASK|INITIATES]->(child:Ticket {id: $child_id, workspace_id: $workspace_id})
 DELETE r
 """
 
@@ -286,12 +286,12 @@ RETURN w
 
 GET_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
-OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK]->(t)
+OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(t)
 RETURN t, parent.id AS parent_id
 """
 GET_ALL_TICKETS = """
 MATCH (t:Ticket {workspace_id: $workspace_id})
-OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK]->(t)
+OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(t)
 RETURN t, parent.id AS parent_id
 """
 
@@ -326,12 +326,12 @@ RETURN g
 # ── Edge Getters ──────────────────────────────────────────────────────────────
 
 GET_SUBTASKS = """
-MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})-[:SUBTASK]->(child:Ticket {workspace_id: $workspace_id})
+MATCH (parent:Ticket {id: $parent_id, workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(child:Ticket {workspace_id: $workspace_id})
 RETURN child
 """
 
 GET_PARENT_TICKETS = """
-MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK]->(child:Ticket {id: $child_id, workspace_id: $workspace_id})
+MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(child:Ticket {id: $child_id, workspace_id: $workspace_id})
 RETURN parent
 """
 
@@ -438,6 +438,16 @@ MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:REQUIRES_STRATE
 RETURN s
 """
 
+GET_INITIATING_STRATEGY = """
+MATCH (s:Strategy {workspace_id: $workspace_id})-[:INITIATES]->(t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
+RETURN s
+"""
+
+GET_TICKETS_REQUIRING_STRATEGY = """
+MATCH (t:Ticket {workspace_id: $workspace_id})-[:REQUIRES_STRATEGY]->(s:Strategy {id: $strategy_id, workspace_id: $workspace_id})
+RETURN t
+"""
+
 UPDATE_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
 FOREACH (_ IN CASE WHEN $title IS NOT NULL THEN [1] ELSE [] END |
@@ -481,7 +491,7 @@ RETURN g
 # ── Combined Getters ──────────────────────────────────────────────────────────
 
 GET_ALL_SUBTICKETS_FOR_TICKET = """
-MATCH (parent:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK*1..]->(sub:Ticket {workspace_id: $workspace_id})
+MATCH (parent:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK|INITIATES*1..]->(sub:Ticket {workspace_id: $workspace_id})
 RETURN DISTINCT sub
 """
 
@@ -621,7 +631,7 @@ RETURN labels(n) AS labels, n
 """
 
 GET_TICKET_ANCESTORS = """
-MATCH path = (root:Ticket {workspace_id: $workspace_id})-[:SUBTASK*0..]->(t:Ticket {id: $id, workspace_id: $workspace_id})
+MATCH path = (root:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES*0..]->(t:Ticket {id: $id, workspace_id: $workspace_id})
 RETURN nodes(path) AS path_nodes
 """
 
@@ -631,7 +641,7 @@ RETURN g
 """
 
 GET_ANCESTORS_WITH_GOALS = """
-MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})<-[:SUBTASK*0..]-(ancestor:Ticket {workspace_id: $workspace_id})
+MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})<-[:SUBTASK|INITIATES*0..]-(ancestor:Ticket {workspace_id: $workspace_id})
 OPTIONAL MATCH (ancestor)-[:EXECUTES]->(g:Goal {workspace_id: $workspace_id})
 RETURN ancestor, g, length(path) AS distance
 ORDER BY distance ASC
@@ -657,7 +667,7 @@ RETURN n AS node, r AS relationship, m AS related_node
 SET_TICKET_ARCHIVED_STATUS = """
 // Find the ticket and its optional incoming relationship first
 MATCH (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})
-OPTIONAL MATCH (parent)-[r:SUBTASK|EXECUTES]->(t)
+OPTIONAL MATCH (parent)-[r:SUBTASK|INITIATES|EXECUTES]->(t)
 WHERE (parent:Ticket OR parent:Goal) AND parent.workspace_id = $workspace_id
 
 // Now, perform all updates
@@ -673,7 +683,7 @@ RETURN t
 
 SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED = """
 // Find all paths to descendant subtickets
-MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK*1..]->(subticket:Ticket {workspace_id: $workspace_id})
+MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK|INITIATES*1..]->(subticket:Ticket {workspace_id: $workspace_id})
 
 // Collect unique nodes and relationships from all found paths
 WITH COLLECT(DISTINCT subticket) AS all_subtickets, COLLECT(path) AS all_paths, $archived AS archived_status

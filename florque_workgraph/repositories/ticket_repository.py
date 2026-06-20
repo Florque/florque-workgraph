@@ -36,6 +36,7 @@ from ..queries.queries import (
     CREATE_STRATEGY,
     CREATE_REQUIRES_STRATEGY,
     GET_TICKET_STRATEGY,
+    GET_INITIATING_STRATEGY,
 )
 
 
@@ -279,3 +280,7 @@ class TicketRepository:
     def get_ticket_strategy(self, ticket_id: str) -> list[Any]:
         """Get the strategy that is required by this ticket."""
         return self.db.execute(GET_TICKET_STRATEGY, self._p(ticket_id=ticket_id))
+
+    def get_initiating_strategy(self, ticket_id: str) -> list[Any]:
+        """Get the strategy that initiates this ticket."""
+        return self.db.execute(GET_INITIATING_STRATEGY, self._p(ticket_id=ticket_id))

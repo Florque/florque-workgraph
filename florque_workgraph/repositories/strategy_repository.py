@@ -15,6 +15,7 @@ from ..queries.queries import (
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
     GET_STRATEGY_WORKGRAPH,
+    GET_TICKETS_REQUIRING_STRATEGY,
 )
 
 class StrategyRepository:
@@ -118,3 +119,7 @@ class StrategyRepository:
     def get_strategy_workgraph(self, strategy_id: str) -> list[Any]:
         """Get the full downstream workgraph for a strategy."""
         return self.db.execute(GET_STRATEGY_WORKGRAPH, self._p(strategy_id=strategy_id))
+
+    def get_requiring_tickets(self, strategy_id: str) -> list[Any]:
+        """Get tickets that require this strategy."""
+        return self.db.execute(GET_TICKETS_REQUIRING_STRATEGY, self._p(strategy_id=strategy_id))
