@@ -7,7 +7,7 @@ from ..queries.queries import (
     GET_ROLE,
     GET_ALL_ROLES,
     GET_WORKSPACE_ROLES,
-    CREATE_HAS_CAPABILITY,
+    ADD_CAPABILITY_TO_ROLE,
     DELETE_HAS_CAPABILITY,
     GET_ROLE_CAPABILITIES,
     GET_CAPABILITY_ROLES,
@@ -68,7 +68,7 @@ class RoleRepository:
 
     def add_capability(self, role_id: str, capability_id: str) -> None:
         """Grant a capability to this role."""
-        self.db.execute_write(CREATE_HAS_CAPABILITY, self._p(role_id=role_id, capability_id=capability_id))
+        self.db.execute_write(ADD_CAPABILITY_TO_ROLE, self._p(role_id=role_id, capability_id=capability_id))
 
     def remove_capability(self, role_id: str, capability_id: str) -> None:
         """Revoke a capability from this role."""

@@ -2,7 +2,7 @@
 #
 # Workspace isolation contract
 # ─────────────────────────────
-# Every query that touches a Ticket, Timebox, or Project node carries a mandatory
+# Every query that touches a Ticket, Timebox node carries a mandatory
 # $workspace_id parameter.  Repositories inject this automatically from their
 # constructor-bound workspace_id so no cross-tenant operation is possible even
 # when a caller supplies a direct node ID.
@@ -553,7 +553,7 @@ GET_ALL_CAPABILITIES = "MATCH (c:Capability) RETURN c"
 
 # ── Authorization: Edge Creation ───────────────────────────────────────────────
 
-CREATE_HAS_CAPABILITY = """
+ADD_CAPABILITY_TO_ROLE = """
 MATCH (r:Role {id: $role_id, workspace_id: $workspace_id})
 MATCH (c:Capability {id: $capability_id})
 MERGE (r)-[:HAS_CAPABILITY]->(c)

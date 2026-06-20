@@ -80,6 +80,8 @@ class StrategyRepository:
     def get_goals(self, strategy_id: str, include_archived: bool = False) -> list[Any]:
         """Get goals tracked via this strategy."""
         return self.db.execute(GET_STRATEGY_GOALS, self._p(strategy_id=strategy_id, include_archived=include_archived))
+    
+    # Tickets
 
     def create_ticket(self, strategy_id: str, ticket_data: dict) -> list[Any]:
         """Create a Ticket node and link it to the Strategy simultaneously."""
@@ -102,12 +104,16 @@ class StrategyRepository:
     def get_tickets(self, strategy_id: str) -> list[Any]:
         """Get tickets that require this strategy."""
         return self.db.execute(GET_TICKETS_FOR_STRATEGY, self._p(strategy_id=strategy_id))
+    
+    # Strategy status
 
     def set_archived_status(self, strategy_id: str, archived: bool) -> list[Any]:
         """Set the archived status of a strategy."""
         return self.db.execute_write(
             SET_STRATEGY_ARCHIVED_STATUS, self._p(strategy_id=strategy_id, archived=archived)
         )
+        
+    # Get the full downstream workgraph for a strategy
 
     def get_strategy_workgraph(self, strategy_id: str) -> list[Any]:
         """Get the full downstream workgraph for a strategy."""

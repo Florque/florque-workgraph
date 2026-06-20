@@ -16,7 +16,7 @@ from ..queries.queries import (
     GET_PROJECTS_FOR_WORKSPACE,
     GET_TICKETS_FOR_WORKSPACE,
     CREATE_ROLE,
-    CREATE_HAS_CAPABILITY,
+    ADD_CAPABILITY_TO_ROLE,
     LINK_DETACHED_MEMBERSHIPS,
 )
 from .user_repository import UserRepository
@@ -89,7 +89,7 @@ class WorkspaceRepository:
         for row in capabilities:
             cap_id = row[0].properties["id"]
             self.db.execute_write(
-                CREATE_HAS_CAPABILITY, {"role_id": role_id, "capability_id": cap_id, "workspace_id": workspace_id}
+                ADD_CAPABILITY_TO_ROLE, {"role_id": role_id, "capability_id": cap_id, "workspace_id": workspace_id}
             )
 
         return result
