@@ -76,15 +76,9 @@ class TicketRepository:
         if ticket_id:
             # Create relationship to parent ticket or goal
             if parent_ticket_id:
-                try:
-                    self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None))
-                except Exception:
-                    pass
+                self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None))
             elif goal_id:
-                try:
-                    self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
-                except Exception:
-                    pass
+                self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
         return rows
 
     def update(self, ticket_id: str, updates: dict) -> list[Any]:
