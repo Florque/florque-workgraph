@@ -260,6 +260,10 @@ class TicketRepository:
         if ticket_type != "creative":
             raise ValueError("Downstream strategies can only be created for tickets of type 'creative'.")
 
+        existing_strategy = self.get_ticket_strategy(ticket_id)
+        if existing_strategy:
+            raise ValueError(f"Ticket with id {ticket_id} already has an associated strategy.")
+
         strategy_repo = StrategyRepository(self.db, self.workspace_id)
         strategy_id = strategy_data.get("id")
         

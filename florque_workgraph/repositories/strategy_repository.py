@@ -2,6 +2,7 @@ from typing import Any
 from ..session import GraphManager
 from ..queries.queries import (
     CREATE_STRATEGY,
+    GET_PROJECTS_FOR_WORKSPACE,
     UPDATE_STRATEGY,
     DELETE_STRATEGY,
     GET_STRATEGY,
@@ -59,7 +60,7 @@ class StrategyRepository:
 
     def get_all(self, include_archived: bool = False) -> list[Any]:
         """Get all Strategy nodes in this workspace."""
-        return self.db.execute(GET_ALL_STRATEGIES, self._p(include_archived=include_archived))
+        return self.db.execute(GET_PROJECTS_FOR_WORKSPACE, self._p(include_archived=include_archived))
 
     def delete(self, strategy_id: str) -> None:
         """Delete a Strategy node."""
