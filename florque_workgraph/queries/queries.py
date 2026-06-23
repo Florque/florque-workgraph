@@ -287,12 +287,14 @@ RETURN w
 GET_TICKET = """
 MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
 OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(t)
-RETURN t, parent.id AS parent_id
+OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(t)
+RETURN t, parent.id AS parent_id, s IS NOT NULL AS is_initiative
 """
 GET_ALL_TICKETS = """
 MATCH (t:Ticket {workspace_id: $workspace_id})
 OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(t)
-RETURN t, parent.id AS parent_id
+OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(t)
+RETURN t, parent.id AS parent_id, s IS NOT NULL AS is_initiative
 """
 
 GET_TIMEBOX = "MATCH (tb:Timebox {id: $id, workspace_id: $workspace_id}) RETURN tb"
@@ -332,7 +334,8 @@ RETURN child
 
 GET_PARENT_TICKETS = """
 MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(child:Ticket {id: $child_id, workspace_id: $workspace_id})
-RETURN parent
+OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(parent)
+RETURN parent, s IS NOT NULL AS is_initiative
 """
 
 GET_DEPENDENCIES = """
@@ -659,7 +662,9 @@ WITH COLLECT(DISTINCT downstream) AS nodes
 UNWIND nodes AS n
 OPTIONAL MATCH (n)-[r:INITIATES|SUBTASK|REQUIRES_STRATEGY]->(m)
 WHERE m IN nodes
-RETURN n AS node, r AS relationship, m AS related_node
+OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(t)
+OPTIONAL MATCH (relateds:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(m)
+RETURN n AS node, r AS relationship, m AS related_node, s IS NOT NULL AS is_initiative, relateds IS NOT NULL AS is_related_initiative
 """
 
 # ── Archiving ──────────────────────────────────────────────────────────────────

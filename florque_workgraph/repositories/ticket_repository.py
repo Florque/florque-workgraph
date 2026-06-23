@@ -142,7 +142,12 @@ class TicketRepository:
 
     def get_parent_tickets(self, child_id: str) -> list[Any]:
         """Return direct parent Ticket nodes within this workspace."""
-        return self.db.execute(GET_PARENT_TICKETS, self._p(child_id=child_id))
+        parent_tickets = self.db.execute(GET_PARENT_TICKETS, self._p(child_id=child_id))
+        for ticket in parent_tickets:
+            ticket_node = ticket[0]
+            is_initiative = ticket[1] if len(ticket) > 1 else False
+            ticket_node.is_initiative = is_initiative
+        return parent_tickets
 
     def get_all_subtickets(self, ticket_id: str) -> list[Any]:
         """Return all descendant Ticket nodes (recursive via SUBTASK) within this workspace."""
