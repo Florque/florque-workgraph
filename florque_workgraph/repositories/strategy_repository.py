@@ -105,8 +105,16 @@ class StrategyRepository:
 
     def get_tickets(self, strategy_id: str) -> list[Any]:
         """Get tickets that require this strategy."""
-        return self.db.execute(GET_TICKETS_FOR_STRATEGY, self._p(strategy_id=strategy_id))
-    
+        tickets = self.db.execute(GET_TICKETS_FOR_STRATEGY, self._p(strategy_id=strategy_id))
+        for ticket in tickets:
+            ticket_node = ticket[0]
+            is_initiative = ticket[1] if len(ticket) > 1 else False
+            if hasattr(ticket_node, "properties") and isinstance(ticket_node.properties, dict):
+                ticket_node.properties['is_initiative'] = is_initiative
+            elif isinstance(ticket_node, dict):
+                ticket_node['is_initiative'] = is_initiative
+        return tickets
+
     # Strategy status
 
     def set_archived_status(self, strategy_id: str, archived: bool) -> list[Any]:

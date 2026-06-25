@@ -427,7 +427,7 @@ DELETE r
 
 GET_TICKETS_FOR_STRATEGY = """
 MATCH (s:Strategy {id: $strategy_id, workspace_id: $workspace_id})-[:INITIATES]->(t:Ticket {workspace_id: $workspace_id})
-RETURN t
+RETURN t, s.is_project AS is_initiative
 """
 
 CREATE_REQUIRES_STRATEGY = """
