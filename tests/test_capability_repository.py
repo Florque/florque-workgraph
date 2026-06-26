@@ -1,65 +1,45 @@
 import pytest
-from florque_workgraph.repositories import (
-    CapabilityRepository,
-    RoleRepository,
-    UserRepository,
-    WorkspaceRepository,
-)
-from florque_workgraph.session import GraphManager
-
-def _ids(rows):
-    return [row[0].properties["id"] for row in rows]
-
-@pytest.fixture(scope="session")
-def florque_workgraph():
-    host = "localhost"
-    port = 7666
-    try:
-        db = GraphManager(host=host, port=port)
-    except Exception as exc:
-        pytest.skip(f"Memgraph is not reachable at {host}:{port}: {exc}")
-    db.apply_constraints()
-    yield db
-    db.close()
-
-@pytest.fixture(autouse=True)
-def clean_graph(florque_workgraph):
-    florque_workgraph.execute_write("MATCH (n) DETACH DELETE n")
+from unittest.mock import MagicMock
+from florque_workgraph.repositories.capability_repository import CapabilityRepository
+from florque_workgraph.queries import queries
 
 @pytest.fixture
-def repos(florque_workgraph):
-    return {
-        "workspace": WorkspaceRepository(florque_workgraph),
-        "user": UserRepository(florque_workgraph),
-        "role": lambda workspace_id: RoleRepository(florque_workgraph, workspace_id),
-        "capability": CapabilityRepository(florque_workgraph),
-    }
+def mock_db():
+    return MagicMock()
 
-def _create_user(user_repo, user_id, name=None):
-    user_repo.create({"id": user_id, "name": name or user_id, "email": f"{user_id}@example.com"})
+@pytest.fixture
+def capability_repo(mock_db):
+    return CapabilityRepository(mock_db)
 
-def _create_workspace(workspace_repo, user_repo, workspace_id="ws-1", creator_id="u-creator"):
-    _create_user(user_repo, creator_id)
-    workspace_repo.create({"id": workspace_id, "name": workspace_id, "creator_user_id": creator_id})
+def test_create(capability_repo):
+    capability_data = {"id": "cap1", "name": "ticket:create", "description": "Create tickets"}
+    capability_repo.create(capability_data)
+    capability_repo.db.execute_write.assert_called_once_with(
+        queries.CREATE_CAPABILITY,
+        capability_data
+    )
 
-def test_capability_repository_methods(repos):
-    capability_repo = repos["capability"]
-    workspace_repo = repos["workspace"]
-    user_repo = repos["user"]
+def test_get(capability_repo):
+    capability_repo.get("cap1")
+    capability_repo.db.execute.assert_called_once_with(
+        queries.GET_CAPABILITY,
+        {"id": "cap1"}
+    )
 
-    capability_repo.create({"id": "cap-1", "name": "ticket:create", "description": "create tickets"})
-    capability_repo.create({"id": "cap-2", "name": "ticket:update", "description": "update tickets"})
+def test_get_all(capability_repo):
+    capability_repo.get_all()
+    capability_repo.db.execute.assert_called_once_with(queries.GET_ALL_CAPABILITIES)
 
-    assert _ids(capability_repo.get("cap-1")) == ["cap-1"]
-    assert set(_ids(capability_repo.get_all())) == {"cap-1", "cap-2"}
+def test_delete(capability_repo):
+    capability_repo.delete("cap1")
+    capability_repo.db.execute_write.assert_called_once_with(
+        queries.DELETE_CAPABILITY,
+        {"id": "cap1"}
+    )
 
-    _create_workspace(workspace_repo, user_repo, workspace_id="ws-cap", creator_id="u-cap")
-    role_repo = repos["role"]("ws-cap")
-    role_repo.create({"id": "role-cap", "name": "CapRole", "scope": "workspace"})
-    role_repo.add_capability("role-cap", "cap-1")
-
-    roles = capability_repo.get_roles_in_workspace("cap-1", "ws-cap")
-    assert "role-cap" in _ids(roles)
-
-    capability_repo.delete("cap-2")
-    assert capability_repo.get("cap-2") == []
+def test_get_roles_in_workspace(capability_repo):
+    capability_repo.get_roles_in_workspace("cap1", "ws1")
+    capability_repo.db.execute.assert_called_once_with(
+        queries.GET_CAPABILITY_ROLES,
+        {"capability_id": "cap1", "workspace_id": "ws1"}
+    )

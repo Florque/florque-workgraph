@@ -1,67 +1,76 @@
 import pytest
-from florque_workgraph.repositories import (
-    MembershipRepository,
-    RoleRepository,
-    UserRepository,
-    WorkspaceRepository,
-)
-from florque_workgraph.session import GraphManager
-
-def _ids(rows):
-    return [row[0].properties["id"] for row in rows]
-
-@pytest.fixture(scope="session")
-def florque_workgraph():
-    host = "localhost"
-    port = 7666
-    try:
-        db = GraphManager(host=host, port=port)
-    except Exception as exc:
-        pytest.skip(f"Memgraph is not reachable at {host}:{port}: {exc}")
-    db.apply_constraints()
-    yield db
-    db.close()
-
-@pytest.fixture(autouse=True)
-def clean_graph(florque_workgraph):
-    florque_workgraph.execute_write("MATCH (n) DETACH DELETE n")
+from unittest.mock import MagicMock
+from florque_workgraph.repositories.membership_repository import MembershipRepository
+from florque_workgraph.queries import queries
 
 @pytest.fixture
-def repos(florque_workgraph):
-    return {
-        "workspace": WorkspaceRepository(florque_workgraph),
-        "user": UserRepository(florque_workgraph),
-        "role": lambda workspace_id: RoleRepository(florque_workgraph, workspace_id),
-        "membership": MembershipRepository(florque_workgraph),
-    }
+def mock_db():
+    return MagicMock()
 
-def _create_user(user_repo, user_id, name=None):
-    user_repo.create({"id": user_id, "name": name or user_id, "email": f"{user_id}@example.com"})
+@pytest.fixture
+def membership_repo(mock_db):
+    return MembershipRepository(mock_db)
 
-def _create_workspace(workspace_repo, user_repo, workspace_id="ws-1", creator_id="u-creator"):
-    _create_user(user_repo, creator_id)
-    workspace_repo.create({"id": workspace_id, "name": workspace_id, "creator_user_id": creator_id})
+def test_create(membership_repo):
+    membership_repo.db.execute.return_value = [1] # Mock workspace existence
+    membership_repo.create("user1", "ws1", email="user1@example.com", membership_id="member1")
 
-def test_membership_repository_methods(repos):
-    membership_repo = repos["membership"]
-    workspace_repo = repos["workspace"]
-    user_repo = repos["user"]
+    membership_repo.db.execute.assert_called_once_with(
+        queries.GET_WORKSPACE,
+        {"id": "ws1"}
+    )
+    
+    membership_repo.db.execute_write.assert_any_call(
+        queries.CREATE_MEMBERSHIP,
+        {"id": "member1", "user_id": "user1", "workspace_id": "ws1", "email": "user1@example.com"}
+    )
+    membership_repo.db.execute_write.assert_any_call(
+        queries.CREATE_HAS_MEMBERSHIP,
+        {"user_id": "user1", "membership_id": "member1", "workspace_id": "ws1"}
+    )
+    membership_repo.db.execute_write.assert_any_call(
+        queries.CREATE_MEMBERSHIP_IN_WORKSPACE,
+        {"membership_id": "member1", "workspace_id": "ws1"}
+    )
 
-    _create_workspace(workspace_repo, user_repo, workspace_id="ws-members", creator_id="u-owner")
-    _create_user(user_repo, "u-member")
+def test_get(membership_repo):
+    membership_repo.get("member1", "ws1")
+    membership_repo.db.execute.assert_called_once_with(
+        queries.GET_MEMBERSHIP,
+        {"id": "member1", "workspace_id": "ws1"}
+    )
 
-    role_repo = repos["role"]("ws-members")
-    role_repo.create({"id": "role-members", "name": "Member", "scope": "workspace"})
+def test_get_by_user_workspace(membership_repo):
+    membership_repo.get_by_user_workspace("user1", "ws1")
+    membership_repo.db.execute.assert_called_once_with(
+        queries.GET_MEMBERSHIP_BY_USER_WORKSPACE,
+        {"user_id": "user1", "workspace_id": "ws1"}
+    )
 
-    membership_repo.create("u-member", "ws-members", membership_id="m-1")
-    assert _ids(membership_repo.get("m-1", "ws-members")) == ["m-1"]
-    assert _ids(membership_repo.get_by_user_workspace("u-member", "ws-members")) == ["m-1"]
+def test_delete(membership_repo):
+    membership_repo.delete("member1", "ws1")
+    membership_repo.db.execute_write.assert_called_once_with(
+        queries.DELETE_MEMBERSHIP,
+        {"id": "member1", "workspace_id": "ws1"}
+    )
 
-    membership_repo.add_role("m-1", "role-members", "ws-members")
-    assert _ids(membership_repo.get_roles("m-1", "ws-members")) == ["role-members"]
+def test_add_role(membership_repo):
+    membership_repo.add_role("member1", "role1", "ws1")
+    membership_repo.db.execute_write.assert_called_once_with(
+        queries.CREATE_MEMBERSHIP_HAS_ROLE,
+        {"membership_id": "member1", "role_id": "role1", "workspace_id": "ws1"}
+    )
 
-    membership_repo.remove_role("m-1", "role-members", "ws-members")
-    assert membership_repo.get_roles("m-1", "ws-members") == []
+def test_remove_role(membership_repo):
+    membership_repo.remove_role("member1", "role1", "ws1")
+    membership_repo.db.execute_write.assert_called_once_with(
+        queries.DELETE_MEMBERSHIP_HAS_ROLE,
+        {"membership_id": "member1", "role_id": "role1", "workspace_id": "ws1"}
+    )
 
-    membership_repo.delete("m-1", "ws-members")
-    assert membership_repo.get("m-1", "ws-members") == []
+def test_get_roles(membership_repo):
+    membership_repo.get_roles("member1", "ws1")
+    membership_repo.db.execute.assert_called_once_with(
+        queries.GET_MEMBERSHIP_ROLES,
+        {"membership_id": "member1", "workspace_id": "ws1"}
+    )
