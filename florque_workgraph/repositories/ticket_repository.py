@@ -99,8 +99,16 @@ class TicketRepository:
             "type": updates.get("type", None),
             "archived": updates.get("archived", None),
         }
-        rows = self.db.execute_write(UPDATE_TICKET, params)
-        return rows
+        self.db.execute_write(UPDATE_TICKET, params)
+        tickets = self.get(ticket_id)
+        for ticket in tickets:
+            ticket_node = ticket[0]
+            is_initiative = ticket[2] if len(ticket) > 2 else False
+            if hasattr(ticket_node, "properties") and isinstance(ticket_node.properties, dict):
+                ticket_node.properties['is_initiative'] = is_initiative
+            elif isinstance(ticket_node, dict):
+                ticket_node['is_initiative'] = is_initiative
+        return tickets
 
 
     def set_archived_status(self, ticket_id: str, archived: bool, include_subtickets: bool = False) -> list[Any]:
