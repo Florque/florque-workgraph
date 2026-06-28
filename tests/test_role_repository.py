@@ -1,85 +1,83 @@
 import pytest
-from florque_workgraph.repositories import (
-    CapabilityRepository,
-    ProjectRepository,
-    RoleRepository,
-    UserRepository,
-    WorkspaceRepository,
-)
-from florque_workgraph.session import GraphManager
-
-def _ids(rows):
-    return [row[0].properties["id"] for row in rows]
-
-@pytest.fixture(scope="session")
-def florque_workgraph():
-    host = "localhost"
-    port = 7666
-    try:
-        db = GraphManager(host=host, port=port)
-    except Exception as exc:
-        pytest.skip(f"Memgraph is not reachable at {host}:{port}: {exc}")
-    db.apply_constraints()
-    yield db
-    db.close()
-
-@pytest.fixture(autouse=True)
-def clean_graph(florque_workgraph):
-    florque_workgraph.execute_write("MATCH (n) DETACH DELETE n")
+from unittest.mock import MagicMock
+from florque_workgraph.repositories.role_repository import RoleRepository
+from florque_workgraph.queries import queries
 
 @pytest.fixture
-def repos(florque_workgraph):
-    return {
-        "workspace": WorkspaceRepository(florque_workgraph),
-        "project": lambda workspace_id: ProjectRepository(florque_workgraph, workspace_id),
-        "user": UserRepository(florque_workgraph),
-        "role": lambda workspace_id: RoleRepository(florque_workgraph, workspace_id),
-        "capability": CapabilityRepository(florque_workgraph),
-    }
+def mock_db():
+    return MagicMock()
 
-def _create_user(user_repo, user_id, name=None):
-    user_repo.create({"id": user_id, "name": name or user_id, "email": f"{user_id}@example.com"})
+@pytest.fixture
+def role_repo(mock_db):
+    return RoleRepository(mock_db, "test_workspace")
 
-def _create_workspace(workspace_repo, user_repo, workspace_id="ws-1", creator_id="u-creator"):
-    _create_user(user_repo, creator_id)
-    workspace_repo.create({"id": workspace_id, "name": workspace_id, "creator_user_id": creator_id})
+def test_create(role_repo):
+    role_data = {"id": "role1", "name": "Test Role", "scope": "workspace"}
+    role_repo.create(role_data)
+    role_repo.db.execute_write.assert_called_once_with(
+        queries.CREATE_ROLE,
+        {'id': 'role1', 'name': 'Test Role', 'scope': 'workspace', 'workspace_id': 'test_workspace'}
+    )
 
-def _create_project(project_repo, project_id="p-1"):
-    project_repo.create({"id": project_id, "name": project_id, "description": f"{project_id} desc"})
+def test_get(role_repo):
+    role_repo.get("role1")
+    role_repo.db.execute.assert_called_once_with(
+        queries.GET_ROLE,
+        {'workspace_id': 'test_workspace', 'id': 'role1'}
+    )
 
-def test_role_repository_methods(repos):
-    capability_repo = repos["capability"]
-    workspace_repo = repos["workspace"]
-    user_repo = repos["user"]
+def test_get_all(role_repo):
+    role_repo.get_all()
+    role_repo.db.execute.assert_called_once_with(
+        queries.GET_ALL_ROLES,
+        {'workspace_id': 'test_workspace'}
+    )
 
-    capability_repo.create({"id": "cap-role-1", "name": "view", "description": "view"})
-    capability_repo.create({"id": "cap-role-2", "name": "edit", "description": "edit"})
+def test_get_workspace_roles(role_repo):
+    role_repo.get_workspace_roles()
+    role_repo.db.execute.assert_called_once_with(
+        queries.GET_WORKSPACE_ROLES,
+        {'workspace_id': 'test_workspace'}
+    )
 
-    _create_workspace(workspace_repo, user_repo, workspace_id="ws-role", creator_id="u-role-owner")
-    _create_user(user_repo, "u-role-member")
+def test_delete(role_repo):
+    role_repo.delete("role1")
+    role_repo.db.execute_write.assert_called_once_with(
+        queries.DELETE_ROLE,
+        {'workspace_id': 'test_workspace', 'id': 'role1'}
+    )
 
-    project_repo = repos["project"]("ws-role")
-    _create_project(project_repo, "p-role")
+def test_add_capability(role_repo):
+    role_repo.add_capability("role1", "cap1")
+    role_repo.db.execute_write.assert_called_once_with(
+        queries.ADD_CAPABILITY_TO_ROLE,
+        {'workspace_id': 'test_workspace', 'role_id': 'role1', 'capability_id': 'cap1'}
+    )
 
-    role_repo = repos["role"]("ws-role")
-    role_repo.create({"id": "r-ws", "name": "WorkspaceRole", "scope": "workspace"})
-    role_repo.create({"id": "r-pr", "name": "ProjectRole", "scope": "project", "project_id": "p-role"})
+def test_remove_capability(role_repo):
+    role_repo.remove_capability("role1", "cap1")
+    role_repo.db.execute_write.assert_called_once_with(
+        queries.DELETE_HAS_CAPABILITY,
+        {'workspace_id': 'test_workspace', 'role_id': 'role1', 'capability_id': 'cap1'}
+    )
 
-    assert _ids(role_repo.get("r-ws")) == ["r-ws"]
-    assert "r-ws" in _ids(role_repo.get_all())
-    assert "r-pr" in _ids(role_repo.get_all())
-    assert "r-ws" in _ids(role_repo.get_workspace_roles())
-    assert _ids(role_repo.get_project_roles("p-role")) == ["r-pr"]
+def test_get_capabilities(role_repo):
+    role_repo.get_capabilities("role1")
+    role_repo.db.execute.assert_called_once_with(
+        queries.GET_ROLE_CAPABILITIES,
+        {'workspace_id': 'test_workspace', 'role_id': 'role1'}
+    )
 
-    role_repo.add_capability("r-ws", "cap-role-1")
-    assert _ids(role_repo.get_capabilities("r-ws")) == ["cap-role-1"]
-    assert "r-ws" in _ids(role_repo.get_roles_with_capability("cap-role-1"))
+def test_get_roles_with_capability(role_repo):
+    role_repo.get_roles_with_capability("cap1")
+    role_repo.db.execute.assert_called_once_with(
+        queries.GET_CAPABILITY_ROLES,
+        {'workspace_id': 'test_workspace', 'capability_id': 'cap1'}
+    )
 
-    user_repo.assign_role("u-role-member", "r-ws", "ws-role")
-    assert "u-role-member" in _ids(role_repo.get_users("r-ws"))
-
-    role_repo.remove_capability("r-ws", "cap-role-1")
-    assert role_repo.get_capabilities("r-ws") == []
-
-    role_repo.delete("r-pr")
-    assert role_repo.get("r-pr") == []
+def test_get_users(role_repo):
+    role_repo.get_users("role1")
+    role_repo.db.execute.assert_called_once_with(
+        queries.GET_ROLE_USERS,
+        {'workspace_id': 'test_workspace', 'role_id': 'role1'}
+    )

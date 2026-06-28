@@ -4,11 +4,9 @@ from .repositories import (
     UserRepository,
     TimeboxRepository,
     WorkspaceRepository,
-    ProjectRepository,
     RoleRepository,
     CapabilityRepository,
     MembershipRepository,
-    VisionRepository,
     StrategyRepository,
     GoalRepository,
 )
@@ -20,11 +18,9 @@ __all__ = [
     "UserRepository",
     "TimeboxRepository",
     "WorkspaceRepository",
-    "ProjectRepository",
     "RoleRepository",
     "CapabilityRepository",
     "MembershipRepository",
-    "VisionRepository",
     "StrategyRepository",
     "GoalRepository",
 ]

@@ -4,7 +4,7 @@ set -e
 # --- Configuration ---
 VENV_DIR="venv"
 MEMGRAPH_CONTAINER_NAME="memgraph-test"
-MEMGRAPH_PORT=7666
+MEMGRAPH_PORT=7689
 MEMGRAPH_IMAGE="memgraph/memgraph"
 
 # --- Functions ---
@@ -49,6 +49,7 @@ sleep 5
 
 # 4. Run Tests
 echo "Running tests..."
+export GRAPH_DB_PORT=$MEMGRAPH_PORT
 pytest tests/
 
 echo "Tests finished successfully."

@@ -7,8 +7,7 @@ from ..queries.queries import (
     GET_ROLE,
     GET_ALL_ROLES,
     GET_WORKSPACE_ROLES,
-    GET_PROJECT_ROLES,
-    CREATE_HAS_CAPABILITY,
+    ADD_CAPABILITY_TO_ROLE,
     DELETE_HAS_CAPABILITY,
     GET_ROLE_CAPABILITIES,
     GET_CAPABILITY_ROLES,
@@ -46,7 +45,7 @@ class RoleRepository:
         """
         return self.db.execute_write(
             CREATE_ROLE,
-            {**role_data, "workspace_id": self.workspace_id, "project_id": role_data.get("project_id")},
+            {**role_data, "workspace_id": self.workspace_id},
         )
 
     def get(self, role_id: str) -> list[Any]:
@@ -61,10 +60,6 @@ class RoleRepository:
         """Return workspace-scoped Role nodes for this workspace."""
         return self.db.execute(GET_WORKSPACE_ROLES, self._p())
 
-    def get_project_roles(self, project_id: str) -> list[Any]:
-        """Return project-scoped Role nodes for the given project within this workspace."""
-        return self.db.execute(GET_PROJECT_ROLES, self._p(project_id=project_id))
-
     def delete(self, role_id: str) -> None:
         """Detach-delete a Role node within this workspace."""
         self.db.execute_write(DELETE_ROLE, self._p(id=role_id))
@@ -73,7 +68,7 @@ class RoleRepository:
 
     def add_capability(self, role_id: str, capability_id: str) -> None:
         """Grant a capability to this role."""
-        self.db.execute_write(CREATE_HAS_CAPABILITY, self._p(role_id=role_id, capability_id=capability_id))
+        self.db.execute_write(ADD_CAPABILITY_TO_ROLE, self._p(role_id=role_id, capability_id=capability_id))
 
     def remove_capability(self, role_id: str, capability_id: str) -> None:
         """Revoke a capability from this role."""

@@ -34,7 +34,8 @@ class UserRepository:
     def _row_to_dict(self, row: Any) -> dict:
         node = row[0]
         return dict(node.properties)
-
+    
+    # ── Helper Methods ─────────────────────────────────────────────────────────
     def _ensure_membership(self, user_id: str, workspace_id: str) -> str:
         """Ensure membership exists for user/workspace; create if missing. Returns membership id."""
         membership_repo = MembershipRepository(self.db)
