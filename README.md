@@ -1,169 +1,226 @@
 # Florque Workgraph
 
-The Florque Workgraph is the core operational memory for Florque. It tracks the fundamental relationships between the "why" and the "what", utilizing a **Vision-Strategy-Goal-Tactics** hierarchy.
+The Florque Workgraph is the core operational memory for Florque. It captures the complete context of any project — from intent down to execution — and makes that context available to both humans and AI agents at every level of the work.
 
-## The Vision-Strategy-Goal-Tactics Approach
+---
 
-Modern work often suffers from a disconnect between high-level objectives and day-to-day execution. To bridge this gap, the Workgraph is structured across four distinct conceptual layers:
+## The Ontology Approach
 
-1. **Vision**: The ultimate destination. It defines the aspirational end-state.
-2. **Strategy**: The chosen path to achieve the vision. Strategies outline the broad approach and focus areas.
-3. **Goal**: Specific, measurable milestones that indicate progress along a strategy.
-4. **Tactics (Tickets/Tasks)**: The actual atomic units of work. The granular steps executed to achieve the goals.
+Most project tools treat work as a flat list of tasks or a shallow hierarchy of epics and stories. Florque takes a different approach: work is modelled as a **typed graph** where every node and edge carries explicit meaning.
 
-## VSGT
-# VSGT Framework
+The graph uses only two node types — **Strategy** and **Ticket** — but allows them to compose fractally to any depth. This means the same ontology describes a birthday party, a local business launch, and a funded startup without any structural changes. What changes is depth, not kind.
+
+---
+
+## Core Node Types
+
+### Strategy
+
+A **Strategy** is an intent container. It defines a coherent slice of direction: what is being pursued, what is explicitly excluded, and why this approach was chosen. A Strategy does not describe tasks — it owns them.
+
+A Strategy marked as **Project** represents a root or a significantly scoped sub-effort that warrants its own focus boundary. Projects are Strategies, but not all Strategies are Projects.
+
+### Ticket
+
+A **Ticket** is an execution unit. It always belongs to exactly one parent — either a Strategy or another Ticket. Tickets are where work actually happens.
+
+Tickets have two subtypes, determined by their **output**, not their size or complexity:
+
+| Subtype | Output | Spawns |
+|---|---|---|
+| **Reactive** | A done / not-done result | Sub-tickets (decomposition) |
+| **Creative** | A scoped body of work requiring its own direction | A child Strategy |
+
+A Reactive ticket may decompose into further sub-tickets. A Creative ticket elevates into a new Strategy, which then owns its own Tickets. This is what enables the fractal structure.
+
+---
+
+## Structural Edges
+
+These edges define the shape of the graph.
+
+| Edge | From | To | Meaning |
+|---|---|---|---|
+| `OWNS` | Strategy | Ticket | Strategy initializes this ticket as a first-level initiative |
+| `SUBTASK` | Ticket (Reactive) | Ticket | Ticket decomposes into a sub-ticket |
+| `ELEVATES_TO` | Ticket (Creative) | Strategy | Ticket spawns a child strategy |
+
+---
+
+## Graph Topology
 
 ```mermaid
 flowchart TD
-    V["🔭 Vision\nLong-term destination.\nStable across pivots."]
+    S_ROOT["⚡ Strategy\n[Project]\nRoot intent"]
 
-    V --> S
+    S_ROOT --> T1["🎫 Ticket\nReactive"]
+    S_ROOT --> T2["🎫 Ticket\nReactive"]
+    S_ROOT --> T3["🎫 Ticket\nCreative"]
 
-    S["⚡ Strategy\nScoped to a checkpoint.\nDefines what you pursue,\nexclude, and why."]
+    T1 --> T1a["🎫 Sub-Ticket"]
+    T1 --> T1b["🎫 Sub-Ticket"]
 
-    S --> G1 & G2 & G3
+    T3 -->|ELEVATES_TO| S_CHILD["⚡ Strategy\n[Project?]\nChild intent"]
 
-    G1["✅ Goal \nVerifiable done-state"]
-    G2["✅ Goal \nVerifiable done-state"]
-    G3["✅ Goal \nVerifiable done-state"]
+    S_CHILD --> T4["🎫 Ticket\nReactive"]
+    S_CHILD --> T5["🎫 Ticket\nCreative"]
 
-    G1 --> T1 & T2
-    G2 --> T3
-    G3 --> T4 & T5
+    T5 -->|ELEVATES_TO| S_GRANDCHILD["⚡ Strategy\nGrandchild intent"]
 
-    T1["🔧 Task"]
-    T2["🔧 Task"]
-    T3["🔧 Task"]
-    T4["🔧 Task"]
-    T5["🔧 Task"]
-
-    %% Styling
-    classDef vision   fill:#EEEDFE,stroke:#534AB7,color:#3C3489
     classDef strategy fill:#E1F5EE,stroke:#0F6E56,color:#085041
-    classDef goal     fill:#FAEEDA,stroke:#BA7517,color:#633806
-    classDef task     fill:#F1EFE8,stroke:#5F5E5A,color:#444441
-    classDef note     fill:#ffffff,stroke:#D3D1C7,color:#5F5E5A,font-size:12px
+    classDef ticket   fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+    classDef project  fill:#EEEDFE,stroke:#534AB7,color:#3C3489
 
-    class V vision
-    class S strategy
-    class G1,G2,G3 goal
-    class T1,T2,T3,T4,T5 task
-    class VNOTE,SNOTE,GNOTE,TNOTE note
+    class S_ROOT project
+    class S_CHILD,S_GRANDCHILD strategy
+    class T1,T2,T3,T4,T5,T1a,T1b ticket
 ```
 
-## Personal Growth Example
-Here is the personal growth vision example.
+The graph grows naturally as Creative tickets surface new strategies. There is no predefined maximum depth.
+
+---
+
+## Relational Edges
+
+Beyond structural edges, nodes can carry explicit relational edges that describe how work items relate to each other across the graph — including across strategy boundaries.
+
+### `REQUIRES`
+
+A hard dependency. Node A cannot start or be considered complete until node B is resolved.
+
+- Always declared at the **ticket level**, even when the two tickets belong to different strategies.
+- Strategies do not require each other. If coordination between strategies is needed, it surfaces through their tickets.
+- Direction: `A REQUIRES B` — B must be resolved first.
+
+### `RELATED`
+
+A soft context link. Two nodes share context that is useful to whoever works on either, but neither blocks the other.
+
+- Undirected — no execution constraint is implied.
+- Use when: a ticket was split from another, two workstreams overlap in domain, or a decision in one place should inform a decision elsewhere.
+- `RELATED` is not a weak `REQUIRES`. Do not use it as a proxy for a dependency you are unwilling to make explicit.
+
+---
+
+## Work Layers
+
+The graph nodes and edges above form the **Execution layer** — the spine of the workgraph. Three additional layers live alongside it, each adding a distinct dimension of information without changing the graph structure itself.
+
+### Execution Layer
+The graph as described: Strategies, Tickets, structural edges, and relational edges. This layer answers *what* is being done and *why*.
+
+### Resources Layer _(planned)_
+Captures who or what is assigned to each node — people, teams, tools, budgets. Resources are attached to nodes; they do not change the graph shape. This layer answers *who* is doing this and *with what*.
+
+### Timeline Layer _(planned)_
+Captures scheduling information — start dates, deadlines, cadences, timeboxes, and delivery containers. Time constraints are overlaid on existing nodes without altering their relationships. This layer answers *when*.
+
+### Collaboration Layer _(planned)_
+Captures communication and coordination signals — comments, decisions, status updates, reviews, and approvals. These live on nodes and edges without polluting the execution structure. This layer answers *how work is coordinated*.
+
+All four layers share the same graph. Querying any node returns a view that combines execution context, resource assignment, timing, and collaboration state — without needing to navigate separate systems.
+
+---
+
+## Example: Local Wine Store Launch
+
 ```mermaid
 flowchart TD
-    V["🔭 Vision\n🏅 Ironman\nComplete a full Ironman triathlon:\n· 3.8km swim · 180km bike · 42km run\nFinish under the 17h cutoff."]
+    ROOT["⚡ Strategy [Project]\nLaunch Maison du Vin\nOpen a curated neighbourhood wine shop\nby Q4, profitable within 18 months."]
 
-    V --> S
+    ROOT --> T_SPACE["🎫 Ticket [Creative]\nSecure and fit out retail space"]
+    ROOT --> T_SUPPLY["🎫 Ticket [Creative]\nBuild supplier relationships"]
+    ROOT --> T_OPS["🎫 Ticket [Reactive]\nRegister business and obtain licences"]
+    ROOT --> T_BRAND["🎫 Ticket [Creative]\nEstablish brand and customer presence"]
 
-    S["⚡ Strategy\n📅 12-month base-build plan\nFirst 6 months: aerobic base, no speed work, focus on consistency.\nFinal 6 months: race-specific blocks\nand one 70.3 tune-up event."]
+    T_SPACE -->|ELEVATES_TO| S_SPACE["⚡ Strategy\nRetail Space"]
+    S_SPACE --> TS1["🎫 Define location criteria"]
+    S_SPACE --> TS2["🎫 Shortlist and visit properties"]
+    S_SPACE --> TS3["🎫 Negotiate lease"]
+    S_SPACE --> TS4["🎫 Fit out interior"]
 
-    S --> G1 & G2 & G3 & G4 & G5
+    T_SUPPLY -->|ELEVATES_TO| S_SUPPLY["⚡ Strategy\nSupplier Network"]
+    S_SUPPLY --> TV1["🎫 Identify target regions and producers"]
+    S_SUPPLY --> TV2["🎫 Attend trade tastings"]
+    S_SUPPLY --> TV3["🎫 Negotiate first orders"]
 
-    G1["✅ Goal \nSwim 3.8km open water\nunder 1h 30m"]
-    G2["✅ Goal \nRide 180km\nunder 7 hours"]
-    G3["✅ Goal \nRun half-marathon\noff the bike without walking"]
-    G4["✅ Goal \nTrain 10h+/week\nfor 8 consecutive weeks"]
-    G5["✅ Goal \nFinish a 70.3\nas race rehearsal"]
+    T_OPS --> TOP1["🎫 Register company"]
+    T_OPS --> TOP2["🎫 Apply for alcohol licence"]
+    T_OPS --> TOP3["🎫 Set up accounting"]
 
-    G1 --> T1
-    G2 --> T2
-    G3 --> T3
-    G4 --> T4
-    G5 --> T5
+    T_BRAND -->|ELEVATES_TO| S_BRAND["⚡ Strategy\nBrand and Presence"]
+    S_BRAND --> TB1["🎫 Define brand identity"]
+    S_BRAND --> TB2["🎫 Build website"]
+    S_BRAND --> TB3["🎫 Plan opening event"]
 
-    T1["🔧 Ad-Hoc training"]
-    T2["🔧 Ad-Hoc training"]
-    T3["🔧 Ad-Hoc training"]
-    T4["🔧 Ad-Hoc training"]
-    T5["🔧 Ad-Hoc training"]
+    TS3 -.->|REQUIRES| TOP2
+    TS4 -.->|REQUIRES| TS3
+    TV3 -.->|REQUIRES| TV2
+    TB3 -.->|REQUIRES| TS4
 
-    %% Styling
-    classDef vision   fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef project  fill:#EEEDFE,stroke:#534AB7,color:#3C3489
     classDef strategy fill:#E1F5EE,stroke:#0F6E56,color:#085041
-    classDef goal     fill:#FAEEDA,stroke:#BA7517,color:#633806
-    classDef task     fill:#F1EFE8,stroke:#5F5E5A,color:#444441
-    classDef note     fill:#ffffff,stroke:#D3D1C7,color:#5F5E5A,font-size:12px
+    classDef ticket   fill:#F1EFE8,stroke:#5F5E5A,color:#444441
 
-    class V vision
-    class S strategy
-    class G1,G2,G3,G4,G5 goal
-    class T1,T2,T3,T4,T5 task
-    class VNOTE,SNOTE,GNOTE,TNOTE note
+    class ROOT project
+    class S_SPACE,S_SUPPLY,S_BRAND strategy
+    class T_SPACE,T_SUPPLY,T_OPS,T_BRAND,TS1,TS2,TS3,TS4,TV1,TV2,TV3,TOP1,TOP2,TOP3,TB1,TB2,TB3 ticket
 ```
-This also scales gracefully — when the project grows large goals can become new Visions as roots for new branches naturally, without needing to redesign how Goals and Tasks work.
 
-## Key benefits for teams as well as individuals
+---
 
-- Clarity over busyness. Every task connects to a Goal, every Goal to a Strategy, every Strategy to a Vision. You always know why you're doing something — not just what. This eliminates the common trap of feeling productive while working on the wrong things.
-- Drift protection. When a new idea, tool, or direction tempts you, VSGT gives you a natural filter: does this serve the current Strategy? If not, it's either a future Milestone conversation or a distraction. You stop chasing everything.
-- Honest planning. The Strategy layer forces you to name what you're not doing. This is rare and valuable — most individuals never articulate trade-offs explicitly, which means they silently accumulate scope until nothing ships.
+## How to Build a Work Graph
 
-- Shared reasoning, not just shared tasks. Teams typically share a backlog but not the logic behind it. VSGT makes the Strategy visible to everyone — so when priorities shift, people understand why, rather than feeling managed.
-- Pivot clarity. Not all changes are equal. VSGT distinguishes a Task pivot (trivial) from a Strategy pivot (medium weight) from a Vision pivot (serious decision). Teams stop having the wrong-level conversation — debating Vision when they should be adjusting a Goal, or tweaking Tasks when the Strategy is actually broken.
-- Cross-domain alignment without overhead. Design, engineering, and marketing work in the same graph under a shared Strategy. Labels separate domains. No separate projects, no sync meetings just to establish what everyone is working toward — the structure carries that context.
-- Orphan detection. Work that doesn't connect to a Goal becomes visible immediately. This surfaces misalignment early — before it becomes wasted sprint capacity.
+When planning any project, the graph is built layer by layer:
 
-## Layer reference
+**1. Define the root Strategy**
+One clear statement: what does done look like for this project? Mark it as `Project`.
 
-| Layer | Job | Changes when |
-|---|---|---|
-| **Vision** | Defines the destination and bounds all experiments | Fundamental market or product shift |
-| **Strategy** | Reasoning + constraints for the current checkpoint | You learn something that breaks the approach |
-| **Goals** | Verifiable done-states — acceptance criteria for the Strategy | Strategy changes |
-| **Tasks** | The actual work, always linked to a Goal | Daily |
+**2. First execution layer**
+List tickets directly under the root strategy. These are first-class initiatives — broad enough to group work, specific enough to own a clear outcome. Do not over-decompose here.
 
-## Pivot classification
+**3. Classify each ticket**
+For each ticket: does resolving it produce a standalone body of work that needs its own direction and focus? If yes → `Creative`, elevate to a child Strategy. If no → `Reactive`, decompose into sub-tickets as needed.
 
-| Type | Weight | Trigger |
-|---|---|---|
-| Task pivot | Trivial | Better implementation found |
-| Goal pivot | Low | Acceptance criteria were wrong |
-| Strategy pivot | Medium | Core approach isn't working |
-| Vision pivot | High | Fundamental rethink required |
+**4. Recurse**
+Repeat steps 2–3 for each child Strategy. Stop decomposing when a ticket is atomic — a single person can execute it without further clarification.
 
+**5. Declare relational edges**
+Scan for hard dependencies and add `REQUIRES` edges. Add `RELATED` edges where shared context genuinely matters to an executor.
 
-By strictly linking tactics all the way up to a vision, every piece of work inherently carries its justification and context.
+---
 
-## Reactive Initiative: Handling Unplanned Work
+## Rules
 
-Not all work fits neatly into the top-down **Vision-Strategy-Goal** hierarchy. Some tasks are reactive, emergent, or don't belong to a larger strategic objective. For these, the Workgraph provides the **Reactive Initiative** node.
+- Every ticket has exactly one parent. No orphans.
+- Ticket type is determined by its **output**, not its size or complexity.
+- `REQUIRES` is always declared at the ticket level. Strategies do not require each other.
+- `RELATED` is not a weak `REQUIRES`. Use it only when context genuinely overlaps.
+- Do not create a child Strategy unless the Creative ticket's output truly needs its own intent to execute.
+- A Strategy marked `Project` signals a focus boundary — use it deliberately, not for every child strategy.
 
-A Reactive Initiative is a container for ad-hoc tasks, such as:
-- **SRE Incidents**: Urgent fixes that need to be tracked.
-- **Bugs**: Unforeseen issues that arise during development.
-- **Copyright Requests**: Atomic tasks like writing a blog post or social media update.
-- **One-off Tasks**: Miscellaneous duties that don't align with a specific goal.
-
-Key characteristics:
-- **Parallel to Vision**: It exists at the same level as the Vision, but serves a different purpose. It's for capturing work that is *not* part of the grand strategic plan.
-- **Direct Execution**: Tickets can be directly linked to a Reactive Initiative without needing to belong to a Goal or Strategy. This provides a lightweight way to manage and track unplanned work while keeping it separate from the strategic backlog.
-
-This ensures that all work is captured in the graph, maintaining full context, without polluting the clarity of the VSGT hierarchy with tasks that don't fit.
+---
 
 ## Empowering AI Agents
 
-The core thesis behind the Florque Workgraph is to **preserve the entire context of all tactics**. 
+The core thesis behind the Florque Workgraph is to **preserve the full context of all tactics**.
 
-Standard task trackers often treat tickets as isolated units. By embedding tickets into a strongly typed graph database, we unlock powerful capabilities for AI and autonomous agents:
+Standard task trackers treat tickets as isolated units. By embedding work into a strongly typed graph, Florque unlocks capabilities that flat tools cannot provide:
 
-- **Monitoring for Purpose Drifting**: Agents can continually evaluate if the current tactics (tickets) still align with their parent Goals and Strategies. If a task drifts from its original purpose or expands out of scope, the system can flag the misalignment.
-- **Bottleneck Detection**: By observing the dependency graph (what blocks what) combined with strategic goals, AI can pinpoint which specific stalled tactic is disproportionately risking a high-level outcome.
-- **Context-Enriched Agentic Execution**: When an AI agent is dispatched to assist with or execute a task, it doesn't just see a narrow ticket description. It traverses the graph to understand the Goal it serves, the Strategy it belongs to, and the Vision it ultimately realizes. This deep, structured context drastically improves the quality and strategic alignment of AI-driven execution.
+- **Context-enriched execution.** When an agent is dispatched to assist with a ticket, it does not see a narrow description. It traverses the graph upward to understand the Strategy it serves, the intent it ultimately realizes, and the constraints declared by sibling tickets. This depth of context directly improves the quality of AI-driven execution.
+- **Purpose drift detection.** Agents can evaluate whether a ticket's current scope still aligns with the Strategy that owns it. When a task expands beyond its original intent, the system surfaces the misalignment before it becomes wasted work.
+- **Bottleneck detection.** By observing the `REQUIRES` dependency graph alongside strategic priorities, agents can identify which stalled ticket is disproportionately risking a high-level outcome.
+- **Graph-aware planning.** When asked to plan a new project, agents build a graph — not a list — because the ontology gives them a structure to reason about intent, decomposition, and dependency simultaneously.
+
+---
 
 ## Technical Implementation
 
-- **Graph Database**: Built on top of Memgraph, queried using Cypher.
-- **Domain Repositories**: Data access is encapsulated in domain-specific repositories (e.g., `TicketRepository`, `GoalRepository`, `StrategyRepository`, `VisionRepository`).
-- **Tenant Isolation**: All operations are workspace-scoped by default to ensure strict multi-tenant data isolation.
+- **Graph Database:** Memgraph, queried using Cypher.
+- **Domain Repositories:** Data access encapsulated in domain-specific repositories (`TicketRepository`, `StrategyRepository`).
+- **Tenant Isolation:** All operations are workspace-scoped by default for strict multi-tenant data isolation.
 
-## Development Setup
-
-To make this package's modules (e.g., `session`, `repositories`) available to other parts of the application, it must be installed in "editable" mode. This creates a link to your source code instead of copying it, so any changes you make are immediately reflected without needing to re-install.
+### Development Setup
 
 From the root directory of the backend project (`florque-backend/florque`), run:
 
@@ -171,69 +228,4 @@ From the root directory of the backend project (`florque-backend/florque`), run:
 pip install -e florque_workgraph
 ```
 
-This only needs to be done once, or whenever you change the dependencies in `pyproject.toml`.
-
-## WorkGraph topology
-```mermaid
-graph TD
-    subgraph "Strategic Work"
-        direction TB
-        V[Vision<br/> Become leading AI-powered project co-pilot]
-
-        S1[Strategy<br/> Focus on solo builders]
-        S2[Strategy<br/> Leverage AI for task generation]
-
-        G1[Goal<br/> 10k beta users]
-        G2[Goal<br/> High activation rate]
-        G3[Goal<br/> Validate graph usability]
-
-        T1[Task<br/> Launch on Product Hunt]
-        T4[Task<br/> Add task breakdown feature]
-
-        %% Subtickets (execution level)
-        ST8[Task<br/> Implement subtask generation]
-        ST9[Task<br/> Refine output quality]
-
-        %% Vision to Strategy
-        V -->|defines direction| S1
-        V -->|defines direction| S2
-
-        %% Strategy to Goals
-        S1 -->|tracked_by| G1
-        S2 -->|tracked_by| G2
-        S2 -->|tracked_by| G3
-
-        %% Goals to Tactics
-        G1 -->|implemented by| T1
-        G2 -->|implemented by| T4
-
-        %% SUBTICKET edges (explicit)
-        T4 -->|SUBTICKET| ST8
-        T4 -->|SUBTICKET| ST9
-    end
-
-    subgraph "Reactive Work"
-        direction TB
-        RI[Reactive Initiative<br/>Bugs, Incidents, etc.]
-        T_BUG[Task<br/>Fix login issue]
-        T_INCIDENT[Task<br/>Resolve API outage]
-
-        RI -->|executed by| T_BUG
-        RI -->|executed by| T_INCIDENT
-    end
-
-    %% Styles
-    classDef vision fill:#1e3a8a,color:#ffffff,stroke:#1e3a8a,stroke-width:2px,font-weight:bold;
-    classDef strategy fill:#2563eb,color:#ffffff,stroke:#1d4ed8,stroke-width:2px;
-    classDef goal fill:#10b981,color:#ffffff,stroke:#059669,stroke-width:2px;
-    classDef tactic fill:#f59e0b,color:#000000,stroke:#d97706,stroke-width:2px;
-    classDef reactive fill:#f43f5e,color:#ffffff,stroke:#e11d48,stroke-width:2px;
-
-
-    %% Apply styles
-    class V vision;
-    class S1,S2,S3 strategy;
-    class G1,G2,G3 goal;
-    class T1,T2,T3,T4,T5,ST1,ST2,ST3,ST4,ST5,ST6,ST7,ST8,ST9,T_BUG,T_INCIDENT tactic;
-    class RI reactive;
-```
+This installs the package in editable mode. Only needs to be run once, or when dependencies in `pyproject.toml` change.

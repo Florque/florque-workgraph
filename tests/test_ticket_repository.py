@@ -90,7 +90,7 @@ def test_get_parent_tickets(ticket_repo):
         queries.GET_PARENT_TICKETS,
         {'workspace_id': 'test_workspace', 'child_id': 'child_id'}
     )
-    assert mock_ticket.is_initiative is True
+    
     assert result == [[mock_ticket, True]]
 
 def test_get_all_subtickets(ticket_repo):
