@@ -650,6 +650,13 @@ RETURN ancestor, g, length(path) AS distance
 ORDER BY distance ASC
 """
 
+GET_REASONING_CONTEXT = """
+MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})<-[:SUBTASK|INITIATES|REQUIRES_STRATEGY*1..]-(ancestor)
+WHERE NONE(x IN nodes(path)[1..-1] WHERE "Strategy" IN labels(x) AND x.is_project = true)
+OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(ancestor)
+RETURN ancestor, labels(ancestor) AS labels, s IS NOT NULL AS is_initiative
+"""
+
 GET_GOAL_TRACKED_BY_STRATEGY = """
 MATCH (s:Strategy {workspace_id: $workspace_id})-[:TRACKS_VIA]->(g:Goal {id: $id, workspace_id: $workspace_id})
 RETURN s

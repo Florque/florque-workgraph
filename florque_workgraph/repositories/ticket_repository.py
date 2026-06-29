@@ -154,7 +154,8 @@ class TicketRepository:
         for ticket in parent_tickets:
             ticket_node = ticket[0]
             is_initiative = ticket[1] if len(ticket) > 1 else False
-            ticket_node.is_initiative = is_initiative
+            if hasattr(ticket_node, "properties") and isinstance(ticket_node.properties, dict):
+                ticket_node.properties['is_initiative'] = is_initiative
         return parent_tickets
 
     def get_all_subtickets(self, ticket_id: str) -> list[Any]:
