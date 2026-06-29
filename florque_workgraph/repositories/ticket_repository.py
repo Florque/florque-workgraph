@@ -37,6 +37,7 @@ from ..queries.queries import (
     CREATE_REQUIRES_STRATEGY,
     GET_TICKET_STRATEGY,
     GET_INITIATING_STRATEGY,
+    GET_REASONING_CONTEXT,
 )
 
 
@@ -296,3 +297,7 @@ class TicketRepository:
     def get_initiating_strategy(self, ticket_id: str) -> list[Any]:
         """Get the strategy that initiates this ticket."""
         return self.db.execute(GET_INITIATING_STRATEGY, self._p(ticket_id=ticket_id))
+
+    def get_reasoning_context(self, ticket_id: str) -> list[Any]:
+        """Traverses up parent tickets and strategies up to the nearest project."""
+        return self.db.execute(GET_REASONING_CONTEXT, self._p(ticket_id=ticket_id))
