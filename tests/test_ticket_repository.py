@@ -122,3 +122,11 @@ def test_set_archived_status_cascaded(ticket_repo):
         queries.SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
         {'workspace_id': 'test_workspace', 'ticket_id': 'ticket_id', 'archived': True}
     )
+
+def test_get_reasoning_context(ticket_repo):
+    ticket_repo.get_reasoning_context("ticket_id")
+    ticket_repo.db.execute.assert_called_once_with(
+        queries.GET_REASONING_CONTEXT,
+        {'workspace_id': 'test_workspace', 'ticket_id': 'ticket_id'}
+    )
+
