@@ -248,6 +248,10 @@ class TicketRepository:
         """Get ancestors of a ticket with their goals, ordered by distance."""
         return self.db.execute(GET_ANCESTORS_WITH_GOALS, self._p(ticket_id=ticket_id))
 
+    def get_reasoning_context(self, ticket_id: str) -> list[Any]:
+        """Get reasoning context of a ticket recursively upwards."""
+        return self.db.execute(GET_REASONING_CONTEXT, self._p(ticket_id=ticket_id))
+
     def create_subtask(self, parent_ticket_id: str, subtask_data: dict) -> list[Any]:
         """Create a subtask for a ticket, with guards based on ticket type."""
         parent_ticket_result = self.get(parent_ticket_id)
