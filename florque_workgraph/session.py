@@ -8,7 +8,7 @@ from .queries.queries import CONSTRAINTS
 
 logger = logging.getLogger(__name__)
 
-GRAPH_HOST = os.getenv("GRAPH_DB_HOST", "89.167.127.253")
+GRAPH_HOST = os.getenv("GRAPH_DB_HOST", "127.0.0.1")
 GRAPH_PORT = int(os.getenv("GRAPH_DB_PORT", "7687"))
 
 

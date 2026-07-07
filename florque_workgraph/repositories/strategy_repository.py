@@ -2,7 +2,6 @@ from typing import Any
 from ..session import GraphManager
 from ..queries.queries import (
     CREATE_STRATEGY,
-    GET_PROJECTS_FOR_WORKSPACE,
     UPDATE_STRATEGY,
     DELETE_STRATEGY,
     GET_STRATEGY,
@@ -11,8 +10,6 @@ from ..queries.queries import (
     DELETE_TRACKS_VIA,
     GET_STRATEGY_GOALS,
     SET_STRATEGY_ARCHIVED_STATUS,
-    CREATE_TICKET,
-    ADD_TICKET_TO_STRATEGY,
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
     GET_STRATEGY_WORKGRAPH,
@@ -60,7 +57,7 @@ class StrategyRepository:
 
     def get_all(self, include_archived: bool = False) -> list[Any]:
         """Get all Strategy nodes in this workspace."""
-        return self.db.execute(GET_PROJECTS_FOR_WORKSPACE, self._p(include_archived=include_archived))
+        return self.db.execute(GET_ALL_STRATEGIES, self._p(include_archived=include_archived))
 
     def delete(self, strategy_id: str) -> None:
         """Delete a Strategy node."""
@@ -84,20 +81,6 @@ class StrategyRepository:
         return self.db.execute(GET_STRATEGY_GOALS, self._p(strategy_id=strategy_id, include_archived=include_archived))
     
     # Tickets
-
-    def create_ticket(self, strategy_id: str, ticket_data: dict) -> list[Any]:
-        """Create a Ticket node and link it to the Strategy simultaneously."""
-        params = self._p(**ticket_data)
-        params.setdefault("archived", None)
-        ticket_id = ticket_data.get("id")
-
-        rows = self.db.execute_write(CREATE_TICKET, params)
-
-        if ticket_id:
-            self.db.execute_write(
-                ADD_TICKET_TO_STRATEGY, self._p(strategy_id=strategy_id, ticket_id=ticket_id)
-            )
-        return rows
 
     def remove_ticket(self, strategy_id: str, ticket_id: str) -> None:
         """Remove Ticket REQUIRES_STRATEGY Strategy."""

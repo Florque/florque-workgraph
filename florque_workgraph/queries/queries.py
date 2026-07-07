@@ -26,6 +26,7 @@ CREATE (t:Ticket {
     status: $status,
     type: $type,
     workspace_id: $workspace_id,
+    is_project: coalesce($is_project, false),
     archived: coalesce($archived, false),
     created_at: datetime(),
     updated_at: datetime()
@@ -384,8 +385,8 @@ RETURN t
 """
 
 GET_PROJECTS_FOR_WORKSPACE = """
-MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})
-RETURN s
+MATCH (t:Ticket {is_project: true, workspace_id: $workspace_id})
+RETURN t
 """
 
 GET_TICKETS_FOR_WORKSPACE = """
@@ -462,8 +463,8 @@ FOREACH (_ IN CASE WHEN $description IS NOT NULL THEN [1] ELSE [] END |
 FOREACH (_ IN CASE WHEN $status IS NOT NULL THEN [1] ELSE [] END |
     SET t.status = $status
 )
-FOREACH (_ IN CASE WHEN $type IS NOT NULL THEN [1] ELSE [] END |
-    SET t.type = $type
+FOREACH (_ IN CASE WHEN $is_project IS NOT NULL THEN [1] ELSE [] END |
+    SET t.is_project = $is_project
 )
 FOREACH (_ IN CASE WHEN $archived IS NOT NULL THEN [1] ELSE [] END |
     SET t.archived = $archived

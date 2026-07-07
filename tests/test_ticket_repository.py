@@ -61,6 +61,13 @@ def test_get_all(ticket_repo):
         {'workspace_id': 'test_workspace'}
     )
 
+def test_get_projects(ticket_repo):
+    ticket_repo.get_projects()
+    ticket_repo.db.execute.assert_called_once_with(
+        queries.GET_PROJECTS_FOR_WORKSPACE,
+        {'workspace_id': 'test_workspace'}
+    )
+
 def test_add_subtask(ticket_repo):
     ticket_repo.add_subtask("parent_id", "child_id")
     ticket_repo.db.execute_write.assert_called_once_with(

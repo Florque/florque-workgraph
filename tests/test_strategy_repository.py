@@ -37,7 +37,7 @@ def test_get(strategy_repo):
 def test_get_all(strategy_repo):
     strategy_repo.get_all()
     strategy_repo.db.execute.assert_called_once_with(
-        queries.GET_PROJECTS_FOR_WORKSPACE,
+        queries.GET_ALL_STRATEGIES,
         {'workspace_id': 'test_workspace', 'include_archived': False}
     )
 

@@ -38,6 +38,7 @@ from ..queries.queries import (
     GET_TICKET_STRATEGY,
     GET_INITIATING_STRATEGY,
     GET_REASONING_CONTEXT,
+    GET_PROJECTS_FOR_WORKSPACE,
 )
 
 
@@ -58,28 +59,45 @@ class TicketRepository:
         return {"workspace_id": self.workspace_id, **kwargs}
 
     # ── Node CRUD ──────────────────────────────────────────────────────────────
-
-    def create(self, ticket_data: dict) -> list[Any]:
-        """Create a Ticket node."""
-        parent_ticket_id = ticket_data.get("parent_id")
-        goal_id = ticket_data.get("goal_id")
-
-        ticket_type = ticket_data.get("type")
-        if ticket_type not in ["creative", "reactive", "scheduled"]:
-            raise ValueError("Ticket type must be one of 'creative', 'reactive', or 'scheduled'.")
-
+    
+    def create_root_ticket(self, ticket_data: dict) -> list[Any]:
+        """Create a root Ticket node (not a subtask)."""
         params = self._p(**ticket_data)
         params.setdefault("archived", None)
+        params.setdefault("is_project", None)
+        
         ticket_id = ticket_data.get("id")
         
         rows = self.db.execute_write(CREATE_TICKET, params)
 
-        if ticket_id:
-            # Create relationship to parent ticket or goal
+        if not rows:
+            raise ValueError(f"Ticket with id {ticket_id} could not be created. It may already exist or there may be a conflict.")
+
+        return rows
+
+    # Create a ticket linking to a parent ticket and optionally linking to a goal. If parent_ticket_id is provided, the ticket will be created as a subtask of that parent ticket.
+    # If goal_id is provided, the ticket will be created as executing that goal.
+    def create(self, ticket_data: dict, parent_ticket_id: str = None) -> list[Any]:
+        """Create a Ticket node."""
+        parent_ticket_id = ticket_data.get("parent_id") or parent_ticket_id
+        # goal_id = ticket_data.get("goal_id")
+
+        params = self._p(**ticket_data)
+        params.setdefault("archived", None)
+        params.setdefault("is_project", None)
+        
+        ticket_id = ticket_data.get("id")
+        
+        rows = self.db.execute_write(CREATE_TICKET, params)
+        # handle possible id duplication or other issues by checking if the ticket was actually created
+        if not rows:
+            raise ValueError(f"Ticket with id {ticket_id} could not be created. It may already exist or there may be a conflict.")
+
+        if rows and ticket_id:
             if parent_ticket_id:
                 self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None))
-            elif goal_id:
-                self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
+            # elif goal_id:
+            #     self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
         return rows
 
     def update(self, ticket_id: str, updates: dict) -> list[Any]:
@@ -97,18 +115,39 @@ class TicketRepository:
             "title": updates.get("title", None),
             "description": updates.get("description", None),
             "status": updates.get("status", None),
-            "type": updates.get("type", None),
+            # "type": updates.get("type", None),
+            "is_project": updates.get("is_project", None),
             "archived": updates.get("archived", None),
         }
         self.db.execute_write(UPDATE_TICKET, params)
+        
         tickets = self.get(ticket_id)
-        for ticket in tickets:
+        
+        if tickets.count == 0:
+            raise ValueError(f"Ticket with id {ticket_id} could not be updated. It may not exist.")
+        
+        if tickets.count > 1:
+            raise ValueError(f"Multiple tickets with id {ticket_id} found. This should not happen in a properly scoped workspace.")
+        
+        ticket = tickets[0]
+        if ticket:
             ticket_node = ticket[0]
             is_initiative = ticket[2] if len(ticket) > 2 else False
             if hasattr(ticket_node, "properties") and isinstance(ticket_node.properties, dict):
                 ticket_node.properties['is_initiative'] = is_initiative
             elif isinstance(ticket_node, dict):
                 ticket_node['is_initiative'] = is_initiative
+        else:
+            raise ValueError(f"Ticket with id {ticket_id} could not be updated. It may not exist.")
+        # for ticket in tickets:
+        #     ticket_node = ticket[0]
+        #     is_initiative = ticket[2] if len(ticket) > 2 else False
+        #     if hasattr(ticket_node, "properties") and isinstance(ticket_node.properties, dict):
+        #         ticket_node.properties['is_initiative'] = is_initiative
+        #     elif isinstance(ticket_node, dict):
+        #         ticket_node['is_initiative'] = is_initiative
+                
+        #TODO: switch to single ticket return since we are updating by id and should only have one result
         return tickets
 
 
@@ -133,15 +172,36 @@ class TicketRepository:
         """Return all Ticket nodes in this workspace."""
         return self.db.execute(GET_ALL_TICKETS, self._p())
 
+    def get_projects(self) -> list[Any]:
+        """Return all Ticket nodes in this workspace that are projects (is_project: true)."""
+        return self.db.execute(GET_PROJECTS_FOR_WORKSPACE, self._p())
+
     def delete(self, ticket_id: str) -> None:
         """Detach-delete a Ticket node within this workspace."""
         self.db.execute_write(DELETE_TICKET, self._p(id=ticket_id))
 
     # ── Hierarchy ──────────────────────────────────────────────────────────────
+    
+    #TODO: duplication with create
+    # def create_subtask(self, parent_ticket_id: str, subtask_data: dict) -> list[Any]:
+    #     """Create a subtask for a ticket, with guards based on ticket type."""
+    #     parent_ticket_result = self.get(parent_ticket_id)
+    #     if not parent_ticket_result:
+    #         raise ValueError(f"Parent ticket with id {parent_ticket_id} not found.")
+        
+    #     # parent_node = parent_ticket_result[0][0]
+    #     # parent_type = parent_node.properties.get("type") if hasattr(parent_node, "properties") else parent_node.get("type")
+        
+    #     # if parent_type not in ["reactive", "scheduled"]:
+    #     #     raise ValueError("Subtasks can only be created for tickets of type 'reactive' or 'scheduled'.")
+        
+    #     subtask_data["parent_id"] = parent_ticket_id
+    #     return self.create(subtask_data)
 
     def add_subtask(self, parent_id: str, child_id: str) -> None:
         self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_id, child_id=child_id, archived=None))
 
+    # remove INITIATES edge
     def remove_subtask(self, parent_id: str, child_id: str) -> None:
         self.db.execute_write(DELETE_SUBTASK, self._p(parent_id=parent_id, child_id=child_id))
 
@@ -251,21 +311,8 @@ class TicketRepository:
     def get_reasoning_context(self, ticket_id: str) -> list[Any]:
         """Get reasoning context of a ticket recursively upwards."""
         return self.db.execute(GET_REASONING_CONTEXT, self._p(ticket_id=ticket_id))
-
-    def create_subtask(self, parent_ticket_id: str, subtask_data: dict) -> list[Any]:
-        """Create a subtask for a ticket, with guards based on ticket type."""
-        parent_ticket_result = self.get(parent_ticket_id)
-        if not parent_ticket_result:
-            raise ValueError(f"Parent ticket with id {parent_ticket_id} not found.")
-        
-        parent_node = parent_ticket_result[0][0]
-        parent_type = parent_node.properties.get("type") if hasattr(parent_node, "properties") else parent_node.get("type")
-        
-        if parent_type not in ["reactive", "scheduled"]:
-            raise ValueError("Subtasks can only be created for tickets of type 'reactive' or 'scheduled'.")
-        
-        subtask_data["parent_id"] = parent_ticket_id
-        return self.create(subtask_data)
+    
+    # ── Strategy ──────────────────────────────────────────────────────────────
 
     def create_strategy(self, ticket_id: str, strategy_data: dict) -> list[Any]:
         """Create a downstream strategy for a ticket, with guards based on ticket type."""
