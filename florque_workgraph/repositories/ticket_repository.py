@@ -39,6 +39,7 @@ from ..queries.queries import (
     GET_INITIATING_STRATEGY,
     GET_REASONING_CONTEXT,
     GET_PROJECTS_FOR_WORKSPACE,
+    GET_TICKET_WORKGRAPH,
 )
 
 
@@ -79,7 +80,9 @@ class TicketRepository:
     # If goal_id is provided, the ticket will be created as executing that goal.
     def create(self, ticket_data: dict, parent_ticket_id: str = None) -> list[Any]:
         """Create a Ticket node."""
-        parent_ticket_id = ticket_data.get("parent_id") or parent_ticket_id
+        print(f"Creating ticket with data: {ticket_data} and parent_ticket_id: {parent_ticket_id}")
+        if not parent_ticket_id:
+            parent_ticket_id = ticket_data.get("parent_id")
         # goal_id = ticket_data.get("goal_id")
 
         params = self._p(**ticket_data)
@@ -92,10 +95,13 @@ class TicketRepository:
         # handle possible id duplication or other issues by checking if the ticket was actually created
         if not rows:
             raise ValueError(f"Ticket with id {ticket_id} could not be created. It may already exist or there may be a conflict.")
+        
+        print(f"Ticket created with id {ticket_id}.")
 
-        if rows and ticket_id:
+        if ticket_id:
             if parent_ticket_id:
                 self.db.execute_write(CREATE_SUBTASK, self._p(parent_id=parent_ticket_id, child_id=ticket_id, archived=None))
+                print(f"Subtask relationship created between parent ticket {parent_ticket_id} and child ticket {ticket_id}.")
             # elif goal_id:
             #     self.db.execute_write(CREATE_EXECUTES, self._p(ticket_id=ticket_id, goal_id=goal_id, archived=None))
         return rows
@@ -123,10 +129,10 @@ class TicketRepository:
         
         tickets = self.get(ticket_id)
         
-        if tickets.count == 0:
+        if len(tickets) == 0:
             raise ValueError(f"Ticket with id {ticket_id} could not be updated. It may not exist.")
         
-        if tickets.count > 1:
+        if len(tickets) > 1:
             raise ValueError(f"Multiple tickets with id {ticket_id} found. This should not happen in a properly scoped workspace.")
         
         ticket = tickets[0]
@@ -222,6 +228,10 @@ class TicketRepository:
     def get_all_subtickets(self, ticket_id: str) -> list[Any]:
         """Return all descendant Ticket nodes (recursive via SUBTASK) within this workspace."""
         return self.db.execute(GET_ALL_SUBTICKETS_FOR_TICKET, self._p(ticket_id=ticket_id))
+
+    def get_ticket_workgraph(self, ticket_id: str) -> list[Any]:
+        """Return a structure representing the subtask/initiates workgraph starting from the given ticket."""
+        return self.db.execute(GET_TICKET_WORKGRAPH, self._p(ticket_id=ticket_id))
 
     def get_edges_by_type(self, ticket_ids: list[str], edge_type: str) -> list[Any]:
         """Return all directed Ticket->Ticket edges of a given type touching any provided ticket id."""
@@ -319,12 +329,6 @@ class TicketRepository:
         ticket_result = self.get(ticket_id)
         if not ticket_result:
             raise ValueError(f"Ticket with id {ticket_id} not found.")
-
-        ticket_node = ticket_result[0][0]
-        ticket_type = ticket_node.properties.get("type") if hasattr(ticket_node, "properties") else ticket_node.get("type")
-
-        if ticket_type != "creative":
-            raise ValueError("Downstream strategies can only be created for tickets of type 'creative'.")
 
         existing_strategy = self.get_ticket_strategy(ticket_id)
         if existing_strategy:

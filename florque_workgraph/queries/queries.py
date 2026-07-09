@@ -24,7 +24,6 @@ CREATE (t:Ticket {
     title: $title,
     description: $description,
     status: $status,
-    type: $type,
     workspace_id: $workspace_id,
     is_project: coalesce($is_project, false),
     archived: coalesce($archived, false),
@@ -673,6 +672,17 @@ WHERE m IN nodes
 OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(t)
 OPTIONAL MATCH (relateds:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(m)
 RETURN n AS node, r AS relationship, m AS related_node, s IS NOT NULL AS is_initiative, relateds IS NOT NULL AS is_related_initiative
+"""
+
+GET_TICKET_WORKGRAPH = """
+MATCH path = (t:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK|INITIATES|REQUIRES_STRATEGY*0..]->(downstream)
+WHERE downstream.workspace_id = $workspace_id
+WITH COLLECT(DISTINCT downstream) AS nodes
+UNWIND nodes AS n
+OPTIONAL MATCH (n)-[r:SUBTASK|INITIATES|REQUIRES_STRATEGY]->(m)
+WHERE m IN nodes
+
+RETURN n AS node, r AS relationship, m AS related_node
 """
 
 # ── Archiving ──────────────────────────────────────────────────────────────────
