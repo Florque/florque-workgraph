@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..session import GraphManager
-from ..queries.queries import (
+from ..queries.user import (
     CREATE_USER,
     UPDATE_USER,
     DELETE_USER,
@@ -13,10 +13,13 @@ from ..queries.queries import (
     CREATE_CREATED,
     GET_ALL_TICKETS_FOR_ASSIGNEE,
     GET_CREATED_TICKETS,
+)
+from ..queries.authorization import (
     CREATE_MEMBERSHIP_HAS_ROLE,
     DELETE_MEMBERSHIP_HAS_ROLE,
     GET_MEMBERSHIP_ROLES,
 )
+
 from .membership_repository import MembershipRepository
 
 

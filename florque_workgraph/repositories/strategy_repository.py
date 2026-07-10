@@ -1,6 +1,7 @@
 from typing import Any
 from ..session import GraphManager
-from ..queries.queries import (
+from ..queries.ticket import CREATE_TICKET
+from ..queries.strategy import (
     CREATE_STRATEGY,
     UPDATE_STRATEGY,
     DELETE_STRATEGY,
@@ -10,9 +11,9 @@ from ..queries.queries import (
     DELETE_TRACKS_VIA,
     GET_STRATEGY_GOALS,
     SET_STRATEGY_ARCHIVED_STATUS,
+    ADD_TICKET_TO_STRATEGY,
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
-    GET_STRATEGY_WORKGRAPH,
     GET_TICKETS_REQUIRING_STRATEGY,
 )
 
@@ -105,12 +106,6 @@ class StrategyRepository:
         return self.db.execute_write(
             SET_STRATEGY_ARCHIVED_STATUS, self._p(strategy_id=strategy_id, archived=archived)
         )
-        
-    # Get the full downstream workgraph for a strategy
-
-    def get_strategy_workgraph(self, strategy_id: str) -> list[Any]:
-        """Get the full downstream workgraph for a strategy."""
-        return self.db.execute(GET_STRATEGY_WORKGRAPH, self._p(strategy_id=strategy_id))
 
     def get_requiring_tickets(self, strategy_id: str) -> list[Any]:
         """Get tickets that require this strategy."""

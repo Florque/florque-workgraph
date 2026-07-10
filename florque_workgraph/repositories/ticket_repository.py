@@ -2,6 +2,10 @@ from typing import Any
 from .strategy_repository import StrategyRepository
 from ..session import GraphManager
 from ..queries.queries import (
+    CREATE_SCHEDULED,
+    GET_SCHEDULED_TIMEBOX,
+)
+from ..queries.ticket import (
     CREATE_TICKET,
     DELETE_TICKET,
     GET_TICKET,
@@ -17,13 +21,6 @@ from ..queries.queries import (
     CREATE_RELATES_TO,
     DELETE_RELATES_TO,
     GET_RELATED,
-    CREATE_ASSIGNED,
-    DELETE_ASSIGNED,
-    GET_ASSIGNED_USERS,
-    CREATE_CREATED,
-    GET_CREATOR,
-    CREATE_SCHEDULED,
-    GET_SCHEDULED_TIMEBOX,
     GET_ALL_SUBTICKETS_FOR_TICKET,
     GET_TICKET_EDGES_BY_TYPE,
     UPDATE_TICKET,
@@ -33,13 +30,20 @@ from ..queries.queries import (
     GET_ANCESTORS_WITH_GOALS,
     SET_TICKET_ARCHIVED_STATUS,
     SET_SUBTICKETS_ARCHIVED_STATUS_CASCADED,
-    CREATE_STRATEGY,
     CREATE_REQUIRES_STRATEGY,
     GET_TICKET_STRATEGY,
     GET_INITIATING_STRATEGY,
     GET_REASONING_CONTEXT,
     GET_PROJECTS_FOR_WORKSPACE,
     GET_TICKET_WORKGRAPH,
+)
+from ..queries.strategy import CREATE_STRATEGY
+from ..queries.user import (
+    CREATE_ASSIGNED,
+    DELETE_ASSIGNED,
+    GET_ASSIGNED_USERS,
+    CREATE_CREATED,
+    GET_CREATOR,
 )
 
 

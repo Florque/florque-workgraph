@@ -1,7 +1,10 @@
 import pytest
 from unittest.mock import MagicMock
 from florque_workgraph.repositories.capability_repository import CapabilityRepository
-from florque_workgraph.queries import queries
+from florque_workgraph.queries import (
+    queries,
+    authorization,
+)
 
 @pytest.fixture
 def mock_db():
@@ -15,7 +18,7 @@ def test_create(capability_repo):
     capability_data = {"id": "cap1", "name": "ticket:create", "description": "Create tickets"}
     capability_repo.create(capability_data)
     capability_repo.db.execute_write.assert_called_once_with(
-        queries.CREATE_CAPABILITY,
+        authorization.CREATE_CAPABILITY,
         capability_data
     )
 
