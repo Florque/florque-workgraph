@@ -37,7 +37,7 @@ def test_get(strategy_repo):
 def test_get_all(strategy_repo):
     strategy_repo.get_all()
     strategy_repo.db.execute.assert_called_once_with(
-        queries.GET_PROJECTS_FOR_WORKSPACE,
+        queries.GET_ALL_STRATEGIES,
         {'workspace_id': 'test_workspace', 'include_archived': False}
     )
 
@@ -75,18 +75,6 @@ def test_get_goals(strategy_repo):
         {'workspace_id': 'test_workspace', 'strategy_id': 'strat1', 'include_archived': False}
     )
 
-def test_create_ticket(strategy_repo):
-    ticket_data = {"id": "ticket1", "title": "Test Ticket", "type": "creative"}
-    strategy_repo.create_ticket("strat1", ticket_data)
-    strategy_repo.db.execute_write.assert_any_call(
-        queries.CREATE_TICKET,
-        {'workspace_id': 'test_workspace', **ticket_data, 'archived': None}
-    )
-    strategy_repo.db.execute_write.assert_any_call(
-        queries.ADD_TICKET_TO_STRATEGY,
-        {'workspace_id': 'test_workspace', 'strategy_id': 'strat1', 'ticket_id': 'ticket1'}
-    )
-
 def test_remove_ticket(strategy_repo):
     strategy_repo.remove_ticket("strat1", "ticket1")
     strategy_repo.db.execute_write.assert_called_once_with(
@@ -106,13 +94,6 @@ def test_set_archived_status(strategy_repo):
     strategy_repo.db.execute_write.assert_called_once_with(
         queries.SET_STRATEGY_ARCHIVED_STATUS,
         {'workspace_id': 'test_workspace', 'strategy_id': 'strat1', 'archived': True}
-    )
-
-def test_get_strategy_workgraph(strategy_repo):
-    strategy_repo.get_strategy_workgraph("strat1")
-    strategy_repo.db.execute.assert_called_once_with(
-        queries.GET_STRATEGY_WORKGRAPH,
-        {'workspace_id': 'test_workspace', 'strategy_id': 'strat1'}
     )
 
 def test_get_requiring_tickets(strategy_repo):

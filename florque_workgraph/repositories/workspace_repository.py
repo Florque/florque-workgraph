@@ -12,12 +12,18 @@ from ..queries.queries import (
     CREATE_WORKSPACE,
     DELETE_WORKSPACE,
     GET_WORKSPACE,
-    GET_USER_WORKSPACES,
+)
+from ..queries.ticket import (
     GET_PROJECTS_FOR_WORKSPACE,
     GET_TICKETS_FOR_WORKSPACE,
+)
+from ..queries.user import (
+    GET_USER_WORKSPACES,
+    LINK_DETACHED_MEMBERSHIPS,
+)
+from ..queries.authorization import (
     CREATE_ROLE,
     ADD_CAPABILITY_TO_ROLE,
-    LINK_DETACHED_MEMBERSHIPS,
 )
 from .user_repository import UserRepository
 from .membership_repository import MembershipRepository

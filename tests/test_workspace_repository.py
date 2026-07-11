@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch, ANY
 from florque_workgraph.repositories.workspace_repository import WorkspaceRepository
 from florque_workgraph.queries import queries
+from florque_workgraph.queries import authorization
 
 @pytest.fixture
 def mock_db():
@@ -38,9 +39,9 @@ def test_create(mock_get_user, MockCapabilityRepo, MockMembershipRepo, MockUserR
     workspace_repo.db.execute_write.assert_any_call(queries.CREATE_WORKSPACE, {"id": "ws1", "name": "Test Workspace"})
     mock_user_repo.create.assert_called_once()
     mock_membership_repo.create.assert_called_once_with("user1", "ws1")
-    workspace_repo.db.execute_write.assert_any_call(queries.CREATE_ROLE, ANY)
+    workspace_repo.db.execute_write.assert_any_call(authorization.CREATE_ROLE, ANY)
     mock_membership_repo.add_role.assert_called_once_with("member1", ANY, "ws1")
-    workspace_repo.db.execute_write.assert_any_call(queries.ADD_CAPABILITY_TO_ROLE, ANY)
+    workspace_repo.db.execute_write.assert_any_call(authorization.ADD_CAPABILITY_TO_ROLE, ANY)
 
 def test_get(workspace_repo):
     workspace_repo.get("ws1")

@@ -16,7 +16,7 @@ def test_create(ticket_repo):
     ticket_repo.create(ticket_data)
     ticket_repo.db.execute_write.assert_called_once_with(
         queries.CREATE_TICKET,
-        {'workspace_id': 'test_workspace', 'id': 'ticket1', 'type': 'creative', 'archived': None}
+        {'workspace_id': 'test_workspace', 'id': 'ticket1', 'type': 'creative', 'archived': None, 'is_project': None}
     )
 
 def test_create_with_parent(ticket_repo):
@@ -24,7 +24,7 @@ def test_create_with_parent(ticket_repo):
     ticket_repo.create(ticket_data)
     ticket_repo.db.execute_write.assert_any_call(
         queries.CREATE_TICKET,
-        {'workspace_id': 'test_workspace', **ticket_data, 'archived': None}
+        {'workspace_id': 'test_workspace', **ticket_data, 'archived': None, 'is_project': None}
     )
     ticket_repo.db.execute_write.assert_any_call(
         queries.CREATE_SUBTASK,
@@ -34,18 +34,10 @@ def test_create_with_parent(ticket_repo):
 def test_create_with_goal(ticket_repo):
     ticket_data = {"id": "ticket1", "goal_id": "goal1", "type": "creative"}
     ticket_repo.create(ticket_data)
-    ticket_repo.db.execute_write.assert_any_call(
+    ticket_repo.db.execute_write.assert_called_once_with(
         queries.CREATE_TICKET,
-        {'workspace_id': 'test_workspace', **ticket_data, 'archived': None}
+        {'workspace_id': 'test_workspace', **ticket_data, 'archived': None, 'is_project': None}
     )
-    ticket_repo.db.execute_write.assert_any_call(
-        queries.CREATE_EXECUTES,
-        {'workspace_id': 'test_workspace', 'ticket_id': 'ticket1', 'goal_id': 'goal1', 'archived': None}
-    )
-
-def test_create_invalid_type(ticket_repo):
-    with pytest.raises(ValueError):
-        ticket_repo.create({"type": "invalid_type"})
 
 def test_get(ticket_repo):
     ticket_repo.get("ticket1")
@@ -58,6 +50,13 @@ def test_get_all(ticket_repo):
     ticket_repo.get_all()
     ticket_repo.db.execute.assert_called_once_with(
         queries.GET_ALL_TICKETS,
+        {'workspace_id': 'test_workspace'}
+    )
+
+def test_get_projects(ticket_repo):
+    ticket_repo.get_projects()
+    ticket_repo.db.execute.assert_called_once_with(
+        queries.GET_PROJECTS_FOR_WORKSPACE,
         {'workspace_id': 'test_workspace'}
     )
 
@@ -99,17 +98,6 @@ def test_get_all_subtickets(ticket_repo):
         queries.GET_ALL_SUBTICKETS_FOR_TICKET,
         {'workspace_id': 'test_workspace', 'ticket_id': 'ticket_id'}
     )
-
-def test_create_subtask(ticket_repo):
-    ticket_repo.get = MagicMock(return_value=[[{"type": "reactive"}]])
-    ticket_repo.create = MagicMock()
-    ticket_repo.create_subtask("parent_id", {"id": "child_id"})
-    ticket_repo.create.assert_called_once_with({'id': 'child_id', 'parent_id': 'parent_id'})
-
-def test_create_subtask_invalid_parent_type(ticket_repo):
-    ticket_repo.get = MagicMock(return_value=[[{"type": "creative"}]])
-    with pytest.raises(ValueError, match="Subtasks can only be created for tickets of type 'reactive' or 'scheduled'."):
-        ticket_repo.create_subtask("parent_id", {"id": "child_id"})
 
 def test_set_archived_status_cascaded(ticket_repo):
     ticket_repo.set_archived_status("ticket_id", True, include_subtickets=True)

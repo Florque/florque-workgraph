@@ -1,7 +1,10 @@
 import pytest
 from unittest.mock import MagicMock
 from florque_workgraph.repositories.role_repository import RoleRepository
-from florque_workgraph.queries import queries
+from florque_workgraph.queries import (
+    queries,
+    authorization,
+)
 
 @pytest.fixture
 def mock_db():
@@ -15,7 +18,7 @@ def test_create(role_repo):
     role_data = {"id": "role1", "name": "Test Role", "scope": "workspace"}
     role_repo.create(role_data)
     role_repo.db.execute_write.assert_called_once_with(
-        queries.CREATE_ROLE,
+        authorization.CREATE_ROLE,
         {'id': 'role1', 'name': 'Test Role', 'scope': 'workspace', 'workspace_id': 'test_workspace'}
     )
 

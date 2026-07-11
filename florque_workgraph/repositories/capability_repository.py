@@ -1,11 +1,11 @@
 from typing import Any
 
 from ..session import GraphManager
-from ..queries.queries import (
-    CREATE_CAPABILITY,
-    DELETE_CAPABILITY,
-    GET_CAPABILITY,
+from ..queries.authorization import (
     GET_ALL_CAPABILITIES,
+    GET_CAPABILITY,
+    DELETE_CAPABILITY,
+    CREATE_CAPABILITY,
     GET_CAPABILITY_ROLES,
 )
 

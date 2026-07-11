@@ -1,8 +1,8 @@
 from typing import Any
 from ..session import GraphManager
-from ..queries.queries import (
+from ..queries.ticket import CREATE_TICKET
+from ..queries.strategy import (
     CREATE_STRATEGY,
-    GET_PROJECTS_FOR_WORKSPACE,
     UPDATE_STRATEGY,
     DELETE_STRATEGY,
     GET_STRATEGY,
@@ -11,11 +11,9 @@ from ..queries.queries import (
     DELETE_TRACKS_VIA,
     GET_STRATEGY_GOALS,
     SET_STRATEGY_ARCHIVED_STATUS,
-    CREATE_TICKET,
     ADD_TICKET_TO_STRATEGY,
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
-    GET_STRATEGY_WORKGRAPH,
     GET_TICKETS_REQUIRING_STRATEGY,
 )
 
@@ -60,7 +58,7 @@ class StrategyRepository:
 
     def get_all(self, include_archived: bool = False) -> list[Any]:
         """Get all Strategy nodes in this workspace."""
-        return self.db.execute(GET_PROJECTS_FOR_WORKSPACE, self._p(include_archived=include_archived))
+        return self.db.execute(GET_ALL_STRATEGIES, self._p(include_archived=include_archived))
 
     def delete(self, strategy_id: str) -> None:
         """Delete a Strategy node."""
@@ -85,20 +83,6 @@ class StrategyRepository:
     
     # Tickets
 
-    def create_ticket(self, strategy_id: str, ticket_data: dict) -> list[Any]:
-        """Create a Ticket node and link it to the Strategy simultaneously."""
-        params = self._p(**ticket_data)
-        params.setdefault("archived", None)
-        ticket_id = ticket_data.get("id")
-
-        rows = self.db.execute_write(CREATE_TICKET, params)
-
-        if ticket_id:
-            self.db.execute_write(
-                ADD_TICKET_TO_STRATEGY, self._p(strategy_id=strategy_id, ticket_id=ticket_id)
-            )
-        return rows
-
     def remove_ticket(self, strategy_id: str, ticket_id: str) -> None:
         """Remove Ticket REQUIRES_STRATEGY Strategy."""
         self.db.execute_write(REMOVE_TICKET_FROM_STRATEGY, self._p(strategy_id=strategy_id, ticket_id=ticket_id))
@@ -122,12 +106,6 @@ class StrategyRepository:
         return self.db.execute_write(
             SET_STRATEGY_ARCHIVED_STATUS, self._p(strategy_id=strategy_id, archived=archived)
         )
-        
-    # Get the full downstream workgraph for a strategy
-
-    def get_strategy_workgraph(self, strategy_id: str) -> list[Any]:
-        """Get the full downstream workgraph for a strategy."""
-        return self.db.execute(GET_STRATEGY_WORKGRAPH, self._p(strategy_id=strategy_id))
 
     def get_requiring_tickets(self, strategy_id: str) -> list[Any]:
         """Get tickets that require this strategy."""

@@ -3,13 +3,14 @@ import uuid
 
 from ..session import GraphManager
 from ..queries.queries import (
+    GET_WORKSPACE
+)
+from ..queries.authorization import (
     CREATE_MEMBERSHIP,
     DELETE_MEMBERSHIP,
     GET_MEMBERSHIP,
     GET_MEMBERSHIP_BY_USER_WORKSPACE,
     GET_PENDING_INVITATIONS,
-    GET_WORKSPACE,
-    GET_USER,
     CREATE_HAS_MEMBERSHIP,
     CREATE_MEMBERSHIP_IN_WORKSPACE,
     CREATE_MEMBERSHIP_HAS_ROLE,

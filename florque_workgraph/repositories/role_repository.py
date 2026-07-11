@@ -1,12 +1,13 @@
 from typing import Any
 
 from ..session import GraphManager
-from ..queries.queries import (
-    CREATE_ROLE,
+
+from ..queries.authorization import (
     DELETE_ROLE,
     GET_ROLE,
     GET_ALL_ROLES,
     GET_WORKSPACE_ROLES,
+    CREATE_ROLE,
     ADD_CAPABILITY_TO_ROLE,
     DELETE_HAS_CAPABILITY,
     GET_ROLE_CAPABILITIES,
