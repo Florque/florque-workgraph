@@ -36,6 +36,7 @@ from ..queries.ticket import (
     GET_REASONING_CONTEXT,
     GET_PROJECTS_FOR_WORKSPACE,
     GET_TICKET_WORKGRAPH,
+    SEARCH_TICKETS,
 )
 from ..queries.strategy import CREATE_STRATEGY
 from ..queries.user import (
@@ -181,6 +182,10 @@ class TicketRepository:
     def get_all(self) -> list[Any]:
         """Return all Ticket nodes in this workspace."""
         return self.db.execute(GET_ALL_TICKETS, self._p())
+
+    def search(self, search_string: str) -> list[Any]:
+        """Return all Ticket nodes in this workspace that match the search string."""
+        return self.db.execute(SEARCH_TICKETS, self._p(search_string=search_string))
 
     def get_projects(self) -> list[Any]:
         """Return all Ticket nodes in this workspace that are projects (is_project: true)."""
