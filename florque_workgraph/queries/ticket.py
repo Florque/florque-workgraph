@@ -146,6 +146,14 @@ RETURN s
 
 # ── Ticket: Combined Getters ──────────────────────────────────────────────────
 
+SEARCH_TICKETS = """
+MATCH (t:Ticket {workspace_id: $workspace_id})
+WHERE t.title CONTAINS $search_string OR t.id CONTAINS $search_string
+OPTIONAL MATCH (parent:Ticket {workspace_id: $workspace_id})-[:SUBTASK|INITIATES]->(t)
+OPTIONAL MATCH (s:Strategy {is_project: true, workspace_id: $workspace_id})-[:INITIATES]->(t)
+RETURN t, parent.id AS parent_id, s IS NOT NULL AS is_initiative
+"""
+
 GET_ALL_SUBTICKETS_FOR_TICKET = """
 MATCH (parent:Ticket {id: $ticket_id, workspace_id: $workspace_id})-[:SUBTASK|INITIATES*1..]->(sub:Ticket {workspace_id: $workspace_id})
 RETURN DISTINCT sub
