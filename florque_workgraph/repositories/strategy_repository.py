@@ -1,6 +1,5 @@
 from typing import Any
 from ..session import GraphManager
-from ..queries.ticket import CREATE_TICKET
 from ..queries.strategy import (
     CREATE_STRATEGY,
     UPDATE_STRATEGY,
@@ -11,7 +10,6 @@ from ..queries.strategy import (
     DELETE_TRACKS_VIA,
     GET_STRATEGY_GOALS,
     SET_STRATEGY_ARCHIVED_STATUS,
-    ADD_TICKET_TO_STRATEGY,
     REMOVE_TICKET_FROM_STRATEGY,
     GET_TICKETS_FOR_STRATEGY,
     GET_TICKETS_REQUIRING_STRATEGY,

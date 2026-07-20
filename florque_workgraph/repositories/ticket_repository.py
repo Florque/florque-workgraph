@@ -8,6 +8,7 @@ from ..queries.queries import (
 from ..queries.ticket import (
     CREATE_TICKET,
     DELETE_TICKET,
+    DELETE_TICKET_BRANCH,
     GET_TICKET,
     GET_ALL_TICKETS,
     CREATE_SUBTASK,
@@ -193,7 +194,7 @@ class TicketRepository:
 
     def delete(self, ticket_id: str) -> None:
         """Detach-delete a Ticket node within this workspace."""
-        self.db.execute_write(DELETE_TICKET, self._p(id=ticket_id))
+        self.db.execute_write(DELETE_TICKET_BRANCH, self._p(id=ticket_id))
 
     # ── Hierarchy ──────────────────────────────────────────────────────────────
     
@@ -334,7 +335,7 @@ class TicketRepository:
     # ── Strategy ──────────────────────────────────────────────────────────────
 
     def create_strategy(self, ticket_id: str, strategy_data: dict) -> list[Any]:
-        """Create a downstream strategy for a ticket, with guards based on ticket type."""
+        """Create an associated strategy for a ticket, with guards based on ticket type."""
         ticket_result = self.get(ticket_id)
         if not ticket_result:
             raise ValueError(f"Ticket with id {ticket_id} not found.")

@@ -17,7 +17,21 @@ RETURN t
 
 # ── Ticket: Node Deletion ─────────────────────────────────────────────────────
 
-DELETE_TICKET = "MATCH (t:Ticket {id: $id, workspace_id: $workspace_id}) DETACH DELETE t"
+DELETE_TICKET = (
+    "MATCH (t:Ticket {id: $id, workspace_id: $workspace_id}) DETACH DELETE t"
+)
+
+DELETE_TICKET_BRANCH = """
+MATCH (t:Ticket {id: $id, workspace_id: $workspace_id})
+CALL {
+    WITH t
+    OPTIONAL MATCH (t)-[:INITIATES*]->(sub)
+    DETACH DELETE sub
+    RETURN count(sub) AS deleted_count
+}
+DETACH DELETE t
+RETURN deleted_count + 1
+"""
 
 # ── Ticket: Edge Creation ─────────────────────────────────────────────────────
 
