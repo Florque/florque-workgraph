@@ -1,0 +1,83 @@
+[project]
+name = "florque-workgraph-monorepo"
+version = "0.1.0"
+description = "Florque Workgraph monorepo (workspace root)"
+requires-python = ">=3.11"
+dependencies = [
+  "florque-graph-core",
+  "florque-workgraph-domain",
+  "florque-signal-hub",
+  "florque-client",
+  "florque-service",
+  "florque-cli",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+florque-graph-core = { workspace = true }
+florque-workgraph-domain = { workspace = true }
+florque-signal-hub = { workspace = true }
+florque-client = { workspace = true }
+florque-service = { workspace = true }
+florque-cli = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "import-linter>=2.0",
+  "testcontainers[neo4j]>=4.8",
+  "types-PyYAML",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning:starlette.*", "ignore:Using `httpx`"]
+markers = ["neo4j: requires a Neo4j database (NEO4J_URI or Docker)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]  # B008: FastAPI Depends / Typer Option defaults
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+packages = ["florque_graph_core", "florque_workgraph_domain", "florque_signal_hub", "florque_client", "florque_service", "florque_cli"]
+
+[tool.importlinter]
+root_packages = ["florque_graph_core", "florque_workgraph_domain", "florque_signal_hub", "florque_client", "florque_service", "florque_cli"]
+
+[[tool.importlinter.contracts]]
+name = "graph-core imports no other florque package"
+type = "forbidden"
+source_modules = ["florque_graph_core"]
+forbidden_modules = ["florque_workgraph_domain", "florque_signal_hub", "florque_client", "florque_service", "florque_cli"]
+
+[[tool.importlinter.contracts]]
+name = "workgraph-domain depends only on graph-core"
+type = "forbidden"
+source_modules = ["florque_workgraph_domain"]
+forbidden_modules = ["florque_signal_hub", "florque_client", "florque_service", "florque_cli"]
+
+[[tool.importlinter.contracts]]
+name = "signal-hub never imports workgraph-domain (mixin roles only)"
+type = "forbidden"
+source_modules = ["florque_signal_hub"]
+forbidden_modules = ["florque_workgraph_domain", "florque_client", "florque_service", "florque_cli"]
+
+[[tool.importlinter.contracts]]
+name = "client does not import interfaces"
+type = "forbidden"
+source_modules = ["florque_client"]
+forbidden_modules = ["florque_service", "florque_cli"]

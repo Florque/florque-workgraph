@@ -10,7 +10,7 @@ It ships two ways from one codebase: a Claude Code plugin that works against a l
 
 **Goals**
 
-1. Every node reaches a Project root. No orphans.
+1. Every node reaches a Project root. No orphans. The one exception is Actor, which is cross-project and must have at least one member\_of edge.
 2. Every write is validated against the ontology, whoever makes it.
 3. The engine is domain-agnostic. Domain knowledge lives in an injected ontology.
 4. Measurement and outcome evaluation are deterministic code, not LLM judgment.
@@ -18,203 +18,13 @@ It ships two ways from one codebase: a Claude Code plugin that works against a l
 
 **Non-goals (v0.1):** a UI; file storage (the graph keeps links to a bucket only); decision records and edit history as graph nodes; capacity planning (optional module); real-time collaboration; an MCP server.
 
-## 2. Architecture
-
-```
-        Claude Code plugin                 other clients
-        skills · commands · hooks              (HTTP)
-                 │                                │
-              fwg CLI ───────────────────────────┤
-         local │        │ remote                  │
-               ▼        ▼                         ▼
-        in-process   florque-service  (HTTP API, auth, workers)
-        client            │
-                          ├── florque-signal-hub ──► hub store (SQLite → SQL)
-                          └── florque-workgraph (ontology + recipes)
-                                     │ injected
-                              florque-graph-core
-                                     │ adapter
-                                   Neo4j
-```
-
-Packages (monorepo, Python 3.11+, one version):
-
-| Package | Role | Depends on |
-| --- | --- | --- |
-| florque-graph-core | Generic engine: CRUD, validation, adapters | none of the others |
-| florque-workgraph | Work-graph ontology, mixins, recipes, policies | graph-core |
-| florque-signal-hub | Routes external observations to graph nodes | graph-core client, workgraph mixin contracts |
-| florque-service | HTTP API, auth, scheduling, wiring | all of the above |
-| florque-cli (fwg) | One command for agents and humans, local or remote | client interface |
-| plugin | Claude Code plugin wrapping fwg | fwg |
-
-The CLI is a fifth package, added because the plugin needs it.
-
-Rule: dependencies point downward only. graph-core never imports workgraph or the hub. The hub never names a work-graph class; it depends on mixin roles.
-
-Modes:
-
-- **Local:** single user. fwg calls the core in-process against your own Neo4j and SQLite. Trust is by convention.
-- **Remote:** fwg calls the service with a token. Database credentials never reach the agent's shell, and permissions are enforced server-side.
-
-## 3. Domain model (workgraph v0.2)
-
-### 3.1 Structure
-
-```
-Project  (root, one per effort)
- ├─ Goal: objective ── Goal: key_result
- ├─ WorkItem: initiative ── (epic) ── task | bug
- ├─ Document, Signal
-Actor (person | team | agent) ── member_of ──► Project
-```
-
-Two typed trees plus links. Initiatives serve goals; metric Signals are about key results.
-
-### 3.2 Classes
-
-| Class | Kinds | Purpose | Parent |
-| --- | --- | --- | --- |
-| Project | none | Root; one product or effort | none |
-| Goal | objective, key\_result | Why. A key result must be measurable | Project (objective); Goal:objective (key\_result) |
-| WorkItem | initiative, epic, task, bug | What is done. Epics are optional | initiative: Project; epic: initiative; task, bug: epic or initiative |
-| Document | spec, design, guideline, reference | Pointer (uri) plus summary of long-form content | Project |
-| Signal | metric, feedback, research, experiment, debrief, incident, insight | An observation | Project |
-| Actor | person, team, agent | Who owns or does work | Actor (team) or none |
-
-Shared fields on every node: id, project\_id (denormalized, immutable), title, summary, status (proposed, active, done, archived), created\_at, updated\_at, version, owned\_by, sources, aliases.
-
-### 3.3 Edges
-
-| Edge | From → To | Meaning |
-| --- | --- | --- |
-| part\_of | each class → its typed parent | Containment. Exactly one parent; every node except Project has one |
-| serves | WorkItem → Goal | Purpose. Initiatives must serve at least one goal |
-| depends\_on | WorkItem → WorkItem | Hard prerequisite |
-| about | Document, Signal → WorkItem, Goal, Project | Subject |
-| member\_of | Actor → Project | Access. Property role: admin, contributor or viewer |
-| owned\_by | any → Actor | One accountable owner |
-
-### 3.4 Key result expectation
-
-Flat fields on the Goal (level key\_result), supplied by the Expectation mixin:
-
-- Definition: series\_code, comparator (<=, >=, between), target\_value, unit, reducer (last, mean, max, all\_points), window\_start and window\_end (ISO dates), baseline\_value.
-- Evaluator-owned: outcome (pending, succeeded, failed, expired), health (on\_track, at\_risk, no\_data), last\_value, last\_observed\_at, evaluated\_at.
-
-Rules: relative targets are resolved to absolute values at creation. Definition fields are immutable once the KR is active; a change means a new KR and the old one is archived. Several dimensions mean several KRs under one objective.
-
-### 3.5 Metric Signals
-
-Fields: series\_code, numeric\_value, unit, aggregation, period, source, observed\_at, revision. Natural key: (series\_code, period, source). A corrected value writes a new revision and archives the old one. The current value is the latest observed\_at that is not archived and has the same unit and aggregation. Store aggregates (one per period), not raw points.
-
-### 3.6 Mixins
-
-Hub-owned contracts, declared in a small LinkML schema and mixed into workgraph classes:
-
-- **Expectation:** the fields in 3.4. Mixed into Goal; a LinkML rule requires them when level is key\_result.
-- **Observation:** kind, source, observed\_at and an edge to the subject. Mixed into Signal.
-- **Routable (later):** title and summary indexed for association.
-
-In Neo4j a node also carries its mixin names as labels (for example :Goal:Expectation), so the hub queries :Expectation without knowing about Goal.
-
-### 3.7 Annotation vocabulary
-
-LinkML annotations are free-form, so the engine owns the list and rejects unknown keys at load.
-
-| Annotation | On | Meaning |
-| --- | --- | --- |
-| edge, edge\_properties | slot | Relationship type and its properties |
-| allowed\_parent | enum value | Allowed parent as Class or Class:kind, comma separated |
-| requires | enum value | Edge that must exist at creation |
-| root | class | Anchors the graph |
-| natural\_key | class | Fields that identify a node exactly |
-| dedupe\_scope | class | parent, root or global |
-| merge | class | additive (default) or claims |
-| owner | slot | human, evaluator or hub: who may write the field |
-| branch, use\_when, not\_for | class | Agent guidance, rendered into the card |
-
-### 3.8 Optional modules
-
-The workgraph-impact fragment adds Component, Risk, Period, Commitment and Area, with edges touches, relies\_on, planned\_in, in\_area, threatens, mitigated\_by and rests\_on. It enables the blast\_radius, collision, slip\_alert and plan\_check recipes. Adopt one module at a time, starting with Components and Areas.
-
-## 4. florque-graph-core
-
-Purpose: execute CRUD against a graph database and validate everything against an ontology injected from outside. It contains no domain knowledge.
-
-### 4.1 Inputs
-
-- **Ontology:** path to a LinkML schema plus fragments, loaded with SchemaView. Required; startup fails without it.
-- **Adapter:** a database adapter instance (Neo4j first).
-- **Principal:** actor id, role and project scope, passed with every call.
-- **Policy hooks:** optional validators registered by the host. The service registers one that checks series\_code against the hub registry.
-
-### 4.2 Operations
-
-| Operation | Behaviour |
-| --- | --- |
-| describe | Ontology version, class list, generated card |
-| get(id, depth) | Node with its parent chain and neighbours to the given depth |
-| search(query, cls, scope, limit) | Lexical and optional embedding search inside one project |
-| create(cls, props, parent\_id, edges, idempotency\_key, confirm\_new) | Node and parent edge in one transaction |
-| update(id, patch, if\_version) | Additive patch with optimistic concurrency |
-| archive(id, cascade) | Sets status archived; refuses if live children exist unless cascade |
-| move(id, new\_parent\_id) | Re-parent with the same validation as create |
-| link, unlink | Typed edge between existing nodes |
-| merge(keep, drop) | Redirect edges, add the dropped title to aliases, archive the dropped node |
-| check(scope) | Run integrity checks |
-| changes(since) | Append-only change log |
-
-### 4.3 Validation pipeline
-
-Every write runs these steps in order and fails with an actionable error:
-
-1. Class and kind exist.
-2. Slot types, enums and required fields (LinkML).
-3. LinkML rules (conditional requirements).
-4. Edge typing: source and target classes allowed by slot ranges.
-5. Parent rules: single parent, required parent, allowed\_parent by kind, requires.
-6. Project isolation: project\_id equal on both endpoints and immutable after creation. Only Actor member\_of edges cross projects.
-7. Field ownership: the principal's role may write each field's owner class.
-8. Duplicate protocol: natural\_key, then dedupe\_key, then similarity.
-9. Transaction: write, idempotency record and change-log entry together.
-10. Post-commit integrity check on touched nodes.
-
-### 4.4 Duplicate protocol
-
-An exact natural\_key or dedupe\_key match returns the existing node (DUPLICATE\_EXACT). A similar match above the review threshold returns candidates and refuses unless confirm\_new is set (DUPLICATE\_SIMILAR). dedupe\_key is a hash of class, kind, parent\_id and normalized title, and is unique per project in the database. Merge rules: fill empty fields, append to the summary, status only moves forward, and conflicts are refused with a review error.
-
-### 4.5 Errors
-
-Every response is {ok, data} or {ok: false, error: {code, message, hint, details}}. Codes: ONTOLOGY\_VIOLATION, PARENT\_RULE, REQUIRED\_EDGE, SCOPE\_VIOLATION, OWNERSHIP, DUPLICATE\_EXACT, DUPLICATE\_SIMILAR, VERSION\_CONFLICT, NOT\_FOUND, FORBIDDEN, UNAUTHENTICATED. The hint tells the agent what to change.
-
-### 4.6 Adapter interface
-
-ensure\_schema(ontology) creates constraints and indexes; read(query, params); write(fn) runs one transaction; health(). No Cypher outside the adapter and a single queries module, and only parameterized queries.
-
-### 4.7 Neo4j mapping
-
-- Labels: class name, Node, and mixin names.
-- Relationship types: uppercase slot names.
-- Common properties: id, project\_id, dedupe\_key, version, status, created\_at, updated\_at, sources.
-- Constraints: unique id on Node; unique (project\_id, dedupe\_key) per label.
-- Indexes: status, series\_code, observed\_at.
-- Property existence constraints need Enterprise; elsewhere the write layer enforces required fields.
-
-### 4.8 Acceptance
-
-- Rejected: a task under the Project, an initiative without serves, an edge across projects, a write to a field the role does not own.
-- The same create with the same idempotency\_key twice yields one node.
-- Two parallel creates with one dedupe\_key yield one node.
-- Generated integrity checks return zero rows on a fresh graph and flag seeded violations.
-
-## 5. florque-workgraph
+## 2. florque-workgraph-domain (the work-graph domain)
 
 Purpose: the work-graph domain, as data plus a few functions.
 
 ```
-packages/workgraph/
-  ontology/workgraph.linkml.yaml          v0.2 (section 3)
+packages/workgraph-domain/
+  ontology/workgraph.linkml.yaml          v0.2 (section 4)
   ontology/mixins.linkml.yaml             Expectation, Observation
   ontology/modules/impact.fragment.yaml   optional
   generated/                              card.md, constraints.cypher, integrity_checks.cypher
@@ -239,6 +49,203 @@ Recipes return one bundle each, so agents make few calls:
 
 Debriefs: a debrief Signal about a task triggers one analysis run. Code computes cycle time, time blocked and estimate error. The model tags the text against controlled vocabularies (outcome, blocker\_types). Results are stored as flat fields on the debrief. Aggregation is Cypher over those fields, and a weekly job writes a proposed insight Signal that cites its evidence and requires a minimum sample.
 
+## 3. Architecture
+
+```
+        Claude Code plugin                 other clients
+        skills · commands · hooks              (HTTP)
+                 │                                │
+              fwg CLI ───────────────────────────┤
+         local │        │ remote                  │
+               ▼        ▼                         ▼
+        in-process   florque-service  (HTTP API, auth, workers)
+        client            │
+                          ├── florque-signal-hub ──► hub store (SQLite → SQL)
+                          └── florque-workgraph-domain (ontology + recipes)
+                                     │ injected
+                              florque-graph-core
+                                     │ GraphStore
+                                   Neo4j
+```
+
+Packages (monorepo, Python 3.11+, one version):
+
+| Package | Role | Depends on |
+| --- | --- | --- |
+| florque-graph-core | Generic engine: CRUD, validation, graph stores | none of the others |
+| florque-workgraph-domain | Work-graph ontology, mixins, recipes, policies | graph-core |
+| florque-signal-hub | Routes external observations to graph nodes | graph-core client, workgraph-domain mixin contracts |
+| florque-service | HTTP API, auth, scheduling, wiring | all of the above |
+| florque-cli (fwg) | One command for agents and humans, local or remote | client interface |
+| plugin | Claude Code plugin wrapping fwg | fwg |
+
+The CLI is the fifth library package, added because the plugin needs it. The plugin is a distribution artifact, not a library. A small florque-client package holds the client interface shared by the CLI and the service tests.
+
+Rule: dependencies point downward only. graph-core never imports workgraph or the hub. The hub never names a work-graph class; it depends on mixin roles.
+
+Modes:
+
+- **Local:** single user. fwg calls the core in-process against your own Neo4j and SQLite. Trust is by convention.
+- **Remote:** fwg calls the service with a token. Database credentials never reach the agent's shell, and permissions are enforced server-side.
+
+## 4. Domain model (workgraph v0.2) LinkML ontology definition
+
+### 4.1 Structure
+
+```
+Project  (root, one per effort)
+ ├─ Goal: objective ── Goal: key_result
+ ├─ WorkItem: initiative ── (epic) ── task | bug
+ ├─ Document, Signal
+Actor (person | team | agent) ── member_of ──► Project
+```
+
+Two typed trees plus links. Initiatives serve goals; metric Signals are about key results.
+
+### 4.2 Classes
+
+| Class | Kinds | Purpose | Parent |
+| --- | --- | --- | --- |
+| Project | none | Root; one product or effort | none |
+| Goal | objective, key\_result | Why. A key result must be measurable | Project (objective); Goal:objective (key\_result) |
+| WorkItem | initiative, epic, task, bug | What is done. Epics are optional | initiative: Project; epic: initiative; task, bug: epic or initiative |
+| Document | spec, design, guideline, reference | Pointer (uri) plus summary of long-form content | Project |
+| Signal | metric, feedback, research, experiment, debrief, incident, insight, update | An observation | Project |
+| Actor | person, team, agent | Who owns or does work. Cross-project: no project\_id, joined to projects by member\_of | Actor (team) or none; exempt from the part\_of rule |
+
+Shared fields on every node: id, project\_id (denormalized, immutable; absent on Actor), title, summary, status (proposed, active, done, archived), created\_at, updated\_at, version, owned\_by, sources, aliases.
+
+### 4.3 Edges
+
+| Edge | From → To | Meaning |
+| --- | --- | --- |
+| part\_of | each class → its typed parent | Containment. Exactly one parent; every node except Project and a top-level Actor has one |
+| serves | WorkItem → Goal | Purpose. Initiatives must serve at least one goal |
+| depends\_on | WorkItem → WorkItem | Hard prerequisite |
+| about | Document, Signal → WorkItem, Goal, Project | Subject |
+| member\_of | Actor → Project | Access. Property role: admin, contributor, viewer or hub (hub is assigned only by an admin command) |
+| owned\_by | any → Actor | One accountable owner |
+
+### 4.4 Key result expectation
+
+Flat fields on the Goal (level key\_result), supplied by the Expectation mixin:
+
+- Definition: series\_code, comparator (<=, >=, between), target\_value, unit, reducer (last, mean, max, all\_points), window\_start and window\_end (ISO dates), baseline\_value.
+- Evaluator-owned: outcome (pending, succeeded, failed, expired), health (on\_track, at\_risk, no\_data), last\_value, last\_observed\_at, evaluated\_at.
+
+Rules: relative targets are resolved to absolute values at creation. Only an admin moves a KR from proposed to active. Definition fields are immutable once the KR is active; a change means a new KR and the old one is archived. Several dimensions mean several KRs under one objective.
+
+### 4.5 Metric Signals
+
+Fields: series\_code, numeric\_value, unit, aggregation, period, source, observed\_at, revision. Natural key: (series\_code, period, source), matched against non-archived nodes only. A corrected value goes through an explicit supersede operation: one transaction archives the old node and creates the new one with revision + 1. The current value is the latest observed\_at that is not archived and has the same unit and aggregation. Store aggregates (one per period), not raw points.
+
+### 4.6 Mixins
+
+Contracts the hub depends on, declared in a small LinkML schema with its own mixins\_version and mixed into workgraph classes. The file lives in workgraph as the published contract. The hub pins a compatible range and owns the conformance test.
+
+- **Expectation:** the fields in 4.4. Mixed into Goal; a LinkML rule requires them when level is key\_result.
+- **Observation:** kind, source, observed\_at and an edge to the subject. Mixed into Signal.
+- **Routable (later):** title and summary indexed for association.
+
+In Neo4j a node also carries its mixin names as labels (for example :Goal:Expectation), so the hub can find :Expectation nodes without knowing about Goal. It does this through graph-core's find\_by\_mixin operation, never through its own Cypher.
+
+### 4.7 Annotation vocabulary
+
+LinkML annotations are free-form, so the engine owns the list and rejects unknown keys at load.
+
+| Annotation | On | Meaning |
+| --- | --- | --- |
+| edge, edge\_properties | slot | Relationship type and its properties |
+| allowed\_parent | enum value | Allowed parent as Class or Class:kind, comma separated |
+| requires | enum value | Edge that must exist at creation |
+| root | class | Anchors the graph |
+| natural\_key | class | Fields that identify a node exactly |
+| dedupe\_scope | class | parent, root, global, or none (natural key and similarity only; used by Signal, whose titles repeat) |
+| scope | class | project (default) or global. Global classes (Actor) carry no project\_id and are exempt from part\_of |
+| immutable | slot | always, or a status: the field is frozen once the node reaches it (Expectation definition fields use active) |
+| merge | class | additive (default) or claims |
+| owner | slot | human (default), evaluator, hub or system (engine-managed): who may write the field. Roles map to owners in workgraph policies: admin and contributor write human, hub writes evaluator and hub, viewer writes nothing |
+| branch, use\_when, not\_for | class | Agent guidance, rendered into the card |
+| required\_kind\_values, required\_edge | mixin class | Contract the host class must satisfy (checked by the hub at startup) |
+| mixins\_version | schema | Version of the mixin contract, checked against the hub's compatible range |
+
+### 4.8 Optional modules
+
+The workgraph-impact fragment adds Component, Risk, Period, Commitment and Area, with edges touches, relies\_on, planned\_in, in\_area, threatens, mitigated\_by and rests\_on. It enables the blast\_radius, collision, slip\_alert and plan\_check recipes. Adopt one module at a time, starting with Components and Areas.
+
+## 5. florque-graph-core python app
+
+Purpose: execute CRUD against a graph database and validate everything against an ontology injected from outside. It contains no domain knowledge.
+
+### 5.1 Inputs
+
+- **Ontology:** path to a LinkML schema plus fragments, loaded with SchemaView. Required; startup fails without it.
+- **GraphStore:** a graph database backend instance (Neo4j first).
+- **Principal:** actor id, role and project scope, passed with every call.
+- **Policy hooks:** optional validators registered by the host. The service registers one that checks series\_code against the hub registry.
+
+### 5.2 Operations
+
+| Operation | Behaviour |
+| --- | --- |
+| describe | Ontology version, class list, generated card |
+| get(id, depth) | Node with its parent chain and neighbours to the given depth |
+| search(query, cls, scope, limit) | Lexical and optional embedding search inside one project |
+| create(cls, props, parent\_id, edges, idempotency\_key, confirm\_new) | Node and parent edge in one transaction |
+| update(id, patch, if\_version) | Additive patch with optimistic concurrency |
+| archive(id, cascade) | Sets status archived and moves dedupe\_key to archived\_dedupe\_key so the key can be reused; refuses if live children exist unless cascade |
+| move(id, new\_parent\_id) | Re-parent with the same validation as create |
+| link, unlink | Typed edge between existing nodes |
+| merge(keep, drop) | Redirect edges, add the dropped title to aliases, archive the dropped node |
+| check(scope) | Run integrity checks |
+| changes(since) | Append-only change log; since is the cursor (sequence number) returned by the previous call |
+| list\_nodes(scope, cls, filters), edges\_of(id, edge, direction) | Read primitives used by recipes |
+| find\_by\_mixin(mixin, filters, scope) | Nodes carrying a mixin label, for hosts such as the hub that work on roles |
+| supersede(id, props) | Archive a node and create its next revision in one transaction (metric corrections) |
+
+### 5.3 Validation pipeline
+
+Every write runs these steps in order and fails with an actionable error:
+
+1. Class and kind exist.
+2. Slot types, enums and required fields (LinkML).
+3. LinkML rules (conditional requirements).
+4. Edge typing: source and target classes allowed by slot ranges.
+5. Parent rules: single parent, required parent, allowed\_parent by kind, requires.
+6. Project isolation: project\_id equal on both endpoints and immutable after creation. Only edges whose target is an Actor (member\_of, owned\_by) cross projects.
+7. Field ownership: the principal's role may write each field's owner class. On create, a role allowed to create the class (per the host policy) authors its human fields; evaluator and hub fields still need their owner. On update, every changed field needs its owner.
+8. Duplicate protocol: natural\_key, then dedupe\_key, then similarity.
+9. Transaction: write, idempotency record and change-log entry together. Idempotency records and change-log entries are infrastructure nodes (:\_Idempotency, :\_ChangeLog) outside the ontology. They are never linked to domain nodes and are hidden from get and search.
+10. Integrity check on touched nodes inside the transaction, before commit. The full check(scope) runs asynchronously.
+
+### 5.4 Duplicate protocol
+
+An exact natural\_key or dedupe\_key match returns the existing node (DUPLICATE\_EXACT). A similar match above the review threshold returns candidates and refuses unless confirm\_new is set (DUPLICATE\_SIMILAR). dedupe\_key is a hash of class, kind, parent\_id and normalized title, and is unique per project in the database. Merge rules: fill empty fields, append to the summary, status only moves forward, and conflicts are refused with a review error.
+
+### 5.5 Errors
+
+Every response is {ok, data} or {ok: false, error: {code, message, hint, details}}. Codes: ONTOLOGY\_VIOLATION, PARENT\_RULE, REQUIRED\_EDGE, SCOPE\_VIOLATION, OWNERSHIP, DUPLICATE\_EXACT, DUPLICATE\_SIMILAR, VERSION\_CONFLICT, MERGE\_CONFLICT, NOT\_FOUND, FORBIDDEN, UNAUTHENTICATED. The hint tells the agent what to change.
+
+### 5.6 GraphStore interface
+
+ensure\_schema(ontology) creates constraints and indexes; read(fn) and write(fn) each run fn in one transaction over a small set of primitives (get/find/create/update nodes, create/delete/list edges, search, idempotency records, change log, native integrity checks); health(). No Cypher outside the Neo4j store and a single queries module, and only parameterized queries. A memory store (optionally file-backed) implements the same primitives for tests and single-user local use.
+
+### 5.7 Neo4j mapping
+
+- Labels: class name, Node, and mixin names.
+- Relationship types: uppercase slot names.
+- Common properties: id, project\_id, dedupe\_key, version, status, created\_at, updated\_at, sources.
+- Constraints: unique id on Node; unique (project\_id, dedupe\_key) per label.
+- Indexes: status, series\_code, observed\_at.
+- Property existence constraints need Enterprise; elsewhere the write layer enforces required fields.
+
+### 5.8 Acceptance
+
+- Rejected: a task under the Project, an initiative without serves, an edge across projects, a write to a field the role does not own.
+- The same create with the same idempotency\_key twice yields one node.
+- Two parallel creates with one dedupe\_key yield one node.
+- Generated integrity checks return zero rows on a fresh graph and flag seeded violations.
+
 ## 6. florque-signal-hub
 
 Purpose: listen to external sources and route what they report to graph nodes. It is a separate engine with its own permissions.
@@ -259,6 +266,8 @@ subject\_code is looked up in the registry and resolved to a node. Metrics becom
 - succeeded or failed on the window result;
 - expired when the window closes with too little data, which is not a failure;
 - health no\_data after N empty days, a grace period before finalizing, and corrections that re-evaluate idempotently and are logged.
+
+Evaluator configuration and defaults: no\_data after 7 empty days; a grace period of 2 days; at\_risk when a linear projection of the series to window\_end misses the target. Reducer all\_points succeeds only if every point in the window satisfies the comparator.
 
 Windows are inclusive dates in the project time zone. An unmatched observation goes to the inbox; the hub never guesses.
 
@@ -303,7 +312,7 @@ Outcome changes (for example pending to failed) emit events for alerts and agent
 Purpose: expose the system over HTTP and run the workers.
 
 - Stack: Python ASGI app (FastAPI as the reference choice), OpenAPI generated, versioned under /v1.
-- Wiring: loads the ontology, builds graph-core with the Neo4j adapter, registers hub validators, starts hub workers and the scheduler.
+- Wiring: loads the ontology, builds graph-core with the Neo4j graph store, registers hub validators, starts hub workers and the scheduler.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -312,14 +321,18 @@ Purpose: expose the system over HTTP and run the workers.
 | GET /v1/nodes/{id}, GET /v1/search | Read |
 | POST /v1/nodes, PATCH /v1/nodes/{id} | Create, update |
 | POST /v1/nodes/{id}:archive, :move | Lifecycle |
-| POST /v1/edges, DELETE /v1/edges | Links |
+| POST /v1/edges, POST /v1/edges:unlink | Links |
 | POST /v1/merge | Merge duplicates |
 | GET /v1/recipes/{name} | Context bundles |
 | POST /v1/check, GET /v1/changes | Integrity and audit |
 | POST /v1/hub/observations | Push ingestion |
-| CRUD /v1/hub/sources, /v1/hub/bindings | Registry (admin) |
+| CRUD /v1/hub/sources, /v1/hub/sensors, /v1/hub/bindings | Registry (admin) |
+| POST /v1/hub/evaluate, POST /v1/hub/reconcile | Trigger evaluation or reconciliation (admin) |
+| POST /v1/nodes:list | Nodes by class and field filters |
 | GET /v1/hub/inbox, POST /v1/hub/inbox/{id}:resolve | Triage |
-| GET /healthz, GET /readyz | Probes |
+| GET /healthz, GET /readyz, GET /metrics | Probes and Prometheus metrics |
+
+GET /v1/ontology is public (version and card only) so clients can detect drift before authenticating.
 
 Conventions: an Idempotency-Key header on writes; every response includes ontology\_version; errors use the core shape.
 
@@ -338,11 +351,11 @@ Operations: structured JSON logs with request and idempotency ids; metrics for l
 
 ## 8. fwg CLI
 
-One command whose subcommands mirror the operations: describe, search, get, create, update, archive, move, link, unlink, merge, check, recipe, brief, sync. Input is JSON (flags or stdin) and output is JSON.
+One command whose subcommands mirror the operations: describe, search, get, create, update, archive, move, link, unlink, merge, check, changes, recipe, brief (alias for recipe start\_task\_brief), sync, hub. Input is JSON (flags or stdin) and output is JSON.
 
 Two implementations sit behind one client interface: in-process and HTTP. Config precedence: flags, environment, .florque/config.yaml, user config.
 
-Environment: FLORQUE\_MODE (local or remote), FLORQUE\_API\_URL, FLORQUE\_TOKEN, FLORQUE\_PROJECT. Local mode also uses NEO4J\_URI, NEO4J\_USER, NEO4J\_PASSWORD and the hub database path. Tokens come from the environment, never from a file in the repository. sync regenerates the card from the server's ontology version.
+Environment: FLORQUE\_MODE (local or remote), FLORQUE\_API\_URL, FLORQUE\_TOKEN, FLORQUE\_PROJECT. Local mode also uses NEO4J\_URI, NEO4J\_USER, NEO4J\_PASSWORD and the hub database path (FLORQUE\_HUB\_DB); FLORQUE\_STORE=file selects a file-backed graph for single-user use without Neo4j. Tokens come from the environment, never from a file in the repository. sync regenerates the card from the server's ontology version.
 
 ## 9. Claude Code plugin
 
@@ -420,7 +433,7 @@ Notes:
 
 | Milestone | Scope | Done when |
 | --- | --- | --- |
-| M1 Core and workgraph | graph-core, Neo4j adapter, v0.2 ontology, generator, local fwg, plugin skills | Section 4.8 tests pass; a project built with /start-project has no orphans |
+| M1 Core and workgraph | graph-core, Neo4j graph store, v0.2 ontology, generator, local fwg, plugin skills | Section 5.8 tests pass; a project built with /start-project has no orphans |
 | M2 Service | HTTP API, tokens, remote mode, compose with service | The same contract suite passes over HTTP; a remote agent cannot reach the database |
 | M3 Signal hub | Registry, sensor adapter, evaluator, conformance check | A sensor series flips a KR to succeeded or failed correctly and idempotently |
 | M4 Association | Slack or email lane, thread bindings, inbox | Precision measured on confirmed proposals; no cross-project leaks |
@@ -434,5 +447,10 @@ Notes:
 - Is the Actor model org-level, with a root organization node?
 - Are program areas above Project a node or a property?
 - Which Slack, Teams or email source comes first, and how are thread semantics mapped?
-- Are recipes Cypher files or Python functions?
 - What ontology migration tooling is needed beyond additive changes?
+
+## 14. Decisions
+
+- Recipes are Python functions in workgraph. They call named, parameterized queries registered in graph-core's queries module, so workgraph contains no raw Cypher.
+- Monorepo tooling: a uv workspace, with dependency direction enforced by import-linter in CI.
+- Embeddings are a pluggable search lane, a no-op until the open question on where they live is resolved.

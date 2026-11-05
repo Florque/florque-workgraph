@@ -1,0 +1,23 @@
+[project]
+name = "florque-client"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "florque-graph-core",
+  "florque-workgraph-domain",
+  "florque-signal-hub",
+  "httpx>=0.27",
+  "PyYAML>=6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/florque_client"]
+
+[tool.uv.sources]
+florque-graph-core = { workspace = true }
+florque-workgraph-domain = { workspace = true }
+florque-signal-hub = { workspace = true }

@@ -1,0 +1,14 @@
+# Optional workgraph-impact module (spec 4.8). Deferred past M3.
+# Adds Component, Risk, Period, Commitment and Area with edges touches,
+# relies_on, planned_in, in_area, threatens, mitigated_by, rests_on.
+# Load it as a fragment: GraphCore(..., fragments=[this file]).
+id: https://florque.com/ontology/workgraph-impact
+name: workgraph_impact
+version: 0.0.1
+prefixes:
+  linkml: https://w3id.org/linkml/
+  florque: https://florque.com/ontology/
+default_prefix: florque
+imports:
+  - linkml:types
+classes: {}

@@ -1,0 +1,254 @@
+id: https://florque.com/ontology/workgraph
+name: workgraph
+title: Florque Workgraph
+description: >-
+  Project goals, work, documents and evidence as a typed graph. Two typed trees
+  (goals and work) under one Project root, plus Documents, Signals and Actors.
+version: 0.2.0
+prefixes:
+  linkml: https://w3id.org/linkml/
+  florque: https://florque.com/ontology/
+default_prefix: florque
+default_range: string
+imports:
+  - linkml:types
+  - mixins.linkml
+
+enums:
+  Status:
+    description: Lifecycle of every node. New agent-created nodes start as proposed.
+    permissible_values:
+      proposed: {}
+      active: {}
+      done: {}
+      archived: {}
+  GoalKind:
+    permissible_values:
+      objective:
+        description: Why. A qualitative outcome.
+        annotations: {allowed_parent: Project}
+      key_result:
+        description: A measurable result under one objective.
+        annotations: {allowed_parent: "Goal:objective"}
+  WorkItemKind:
+    permissible_values:
+      initiative:
+        annotations: {allowed_parent: Project, requires: serves}
+      epic:
+        annotations: {allowed_parent: "WorkItem:initiative"}
+      task:
+        annotations: {allowed_parent: "WorkItem:epic,WorkItem:initiative"}
+      bug:
+        annotations: {allowed_parent: "WorkItem:epic,WorkItem:initiative"}
+  DocumentKind:
+    permissible_values:
+      spec: {annotations: {allowed_parent: Project}}
+      design: {annotations: {allowed_parent: Project}}
+      guideline: {annotations: {allowed_parent: Project}}
+      reference: {annotations: {allowed_parent: Project}}
+  SignalKind:
+    permissible_values:
+      metric: {annotations: {allowed_parent: Project}}
+      feedback: {annotations: {allowed_parent: Project}}
+      research: {annotations: {allowed_parent: Project}}
+      experiment: {annotations: {allowed_parent: Project}}
+      debrief: {annotations: {allowed_parent: Project}}
+      incident: {annotations: {allowed_parent: Project}}
+      insight: {annotations: {allowed_parent: Project}}
+      update: {annotations: {allowed_parent: Project}}
+  ActorKind:
+    permissible_values:
+      person: {annotations: {allowed_parent: "Actor:team"}}
+      team: {annotations: {allowed_parent: "Actor:team"}}
+      agent: {annotations: {allowed_parent: "Actor:team"}}
+  MemberRole:
+    permissible_values:
+      admin: {}
+      contributor: {}
+      viewer: {}
+      hub: {}
+
+slots:
+  id:
+    identifier: true
+    range: string
+    annotations: {owner: system}
+  project_id:
+    range: string
+    annotations: {owner: system, immutable: always}
+  kind:
+    range: string
+  title:
+    range: string
+    required: true
+  summary:
+    range: string
+  status:
+    range: Status
+  created_at:
+    range: datetime
+    annotations: {owner: system}
+  updated_at:
+    range: datetime
+    annotations: {owner: system}
+  version:
+    range: integer
+    annotations: {owner: system}
+  sources:
+    description: Evidence for the node (URLs, quotes, file references).
+    range: string
+    multivalued: true
+  aliases:
+    range: string
+    multivalued: true
+  time_zone:
+    description: IANA time zone used for expectation windows.
+    range: string
+  uri:
+    description: Location of the long-form content (bucket, repo or web link).
+    range: string
+  role:
+    range: MemberRole
+
+  # ---- edges ----
+  part_of:
+    description: Containment. Exactly one typed parent.
+    range: Node
+    annotations: {edge: PART_OF}
+  serves:
+    description: Purpose. A work item serves goals.
+    range: Goal
+    multivalued: true
+    annotations: {edge: SERVES}
+  depends_on:
+    description: Hard prerequisite.
+    range: WorkItem
+    multivalued: true
+    annotations: {edge: DEPENDS_ON}
+  about:
+    description: Subject of a Document or Signal.
+    multivalued: true
+    any_of:
+      - range: WorkItem
+      - range: Goal
+      - range: Project
+    annotations: {edge: ABOUT}
+  member_of:
+    description: Access to a project.
+    range: Project
+    multivalued: true
+    annotations: {edge: MEMBER_OF, edge_properties: role}
+  owned_by:
+    description: The one accountable owner.
+    range: Actor
+    annotations: {edge: OWNED_BY}
+
+classes:
+  Node:
+    abstract: true
+    slots: [id, project_id, kind, title, summary, status, created_at, updated_at,
+            version, sources, aliases, part_of, owned_by]
+
+  Project:
+    is_a: Node
+    description: Root; one product or effort.
+    slots: [time_zone]
+    annotations:
+      root: "true"
+      dedupe_scope: global
+      use_when: Starting a new product or effort.
+
+  Goal:
+    is_a: Node
+    mixins: [Expectation]
+    description: Why. Objectives contain key results; a key result must be measurable.
+    slot_usage:
+      kind:
+        range: GoalKind
+        required: true
+    rules:
+      - description: A key result carries a complete expectation.
+        preconditions:
+          slot_conditions:
+            kind: {equals_string: key_result}
+        postconditions:
+          slot_conditions:
+            series_code: {required: true}
+            comparator: {required: true}
+            target_value: {required: true}
+            unit: {required: true}
+            reducer: {required: true}
+            window_start: {required: true}
+            window_end: {required: true}
+    annotations:
+      branch: goals
+      use_when: Expressing why work exists (objective) or how success is measured (key_result).
+      not_for: Deliverables or activities; use WorkItem.
+
+  WorkItem:
+    is_a: Node
+    description: What is done. Epics are optional.
+    slots: [serves, depends_on]
+    slot_usage:
+      kind:
+        range: WorkItemKind
+        required: true
+    annotations:
+      branch: work
+      use_when: Planned work at any granularity (initiative, epic, task, bug).
+      not_for: Outcomes or measurements; use Goal.
+
+  Document:
+    is_a: Node
+    description: Pointer plus summary of long-form content.
+    slots: [uri, about]
+    slot_usage:
+      kind:
+        range: DocumentKind
+        required: true
+      uri:
+        required: true
+    annotations:
+      use_when: A spec, design, guideline or reference that lives elsewhere.
+      not_for: Storing file contents; keep a link and a summary only.
+
+  Signal:
+    is_a: Node
+    mixins: [Observation]
+    description: An observation (metric, feedback, research, incident, ...).
+    slots: [about]
+    slot_usage:
+      kind:
+        range: SignalKind
+        required: true
+    rules:
+      - description: A metric Signal is one aggregate value of a series.
+        preconditions:
+          slot_conditions:
+            kind: {equals_string: metric}
+        postconditions:
+          slot_conditions:
+            series_code: {required: true}
+            numeric_value: {required: true}
+            unit: {required: true}
+            period: {required: true}
+            observed_at: {required: true}
+    annotations:
+      natural_key: series_code,period,source
+      dedupe_scope: none
+      merge: claims
+      use_when: Evidence from outside the plan (metrics, feedback, chat, incidents).
+      not_for: Changing status or structure.
+
+  Actor:
+    is_a: Node
+    description: Who owns or does work. Cross-project.
+    slots: [member_of]
+    slot_usage:
+      kind:
+        range: ActorKind
+        required: true
+    annotations:
+      scope: global
+      dedupe_scope: global
+      use_when: A person, team or agent that owns or does work.

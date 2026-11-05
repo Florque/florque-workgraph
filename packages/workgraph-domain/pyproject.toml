@@ -1,0 +1,20 @@
+[project]
+name = "florque-workgraph-domain"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "florque-graph-core",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/florque_workgraph_domain"]
+
+[tool.uv.sources]
+florque-graph-core = { workspace = true }
+
+[project.scripts]
+fwg-gen = "florque_workgraph_domain.generate:main"

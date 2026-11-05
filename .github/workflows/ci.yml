@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26.0
+        env: {NEO4J_AUTH: neo4j/testpassword}
+        ports: ['7687:7687']
+        options: >-
+          --health-cmd "wget --spider -q http://localhost:7474 || exit 1"
+          --health-interval 10s --health-retries 15
+    env:
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: testpassword
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check packages tests
+      - run: uv run ruff format --check packages tests
+      - run: uv run mypy
+      - run: uv run lint-imports
+      - name: Generated artifacts are current
+        run: uv run fwg-gen --check
+      - run: uv run pytest

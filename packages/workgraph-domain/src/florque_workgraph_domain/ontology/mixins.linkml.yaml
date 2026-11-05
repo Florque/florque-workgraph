@@ -1,0 +1,140 @@
+id: https://florque.com/ontology/mixins
+name: mixins
+title: Florque hub mixin contracts
+description: >-
+  Contracts the signal hub depends on. Mixed into workgraph classes; the hub
+  only ever refers to these mixin names, never to work-graph class names.
+version: 0.1.0
+annotations:
+  mixins_version: 0.1.0
+prefixes:
+  linkml: https://w3id.org/linkml/
+  florque: https://florque.com/ontology/
+default_prefix: florque
+default_range: string
+imports:
+  - linkml:types
+
+enums:
+  Comparator:
+    permissible_values:
+      "<=": {}
+      ">=": {}
+      between: {}
+  Reducer:
+    permissible_values:
+      last: {}
+      mean: {}
+      max: {}
+      all_points: {}
+  Outcome:
+    permissible_values:
+      pending: {}
+      succeeded: {}
+      failed: {}
+      expired: {}
+  Health:
+    permissible_values:
+      on_track: {}
+      at_risk: {}
+      no_data: {}
+
+slots:
+  # --- Expectation: definition (human-owned, frozen once active) ---
+  series_code:
+    range: string
+    annotations: {immutable: active}
+  comparator:
+    range: Comparator
+    annotations: {immutable: active}
+  target_value:
+    range: float
+    annotations: {immutable: active}
+  target_upper:
+    description: Upper bound when comparator is between.
+    range: float
+    annotations: {immutable: active}
+  unit:
+    range: string
+  reducer:
+    range: Reducer
+    annotations: {immutable: active}
+  window_start:
+    range: date
+    annotations: {immutable: active}
+  window_end:
+    range: date
+    annotations: {immutable: active}
+  baseline_value:
+    range: float
+    annotations: {immutable: active}
+  # --- Expectation: evaluator-owned ---
+  outcome:
+    range: Outcome
+    annotations: {owner: evaluator}
+  health:
+    range: Health
+    annotations: {owner: evaluator}
+  last_value:
+    range: float
+    annotations: {owner: evaluator}
+  last_observed_at:
+    range: datetime
+    annotations: {owner: evaluator}
+  evaluated_at:
+    range: datetime
+    annotations: {owner: evaluator}
+  # --- Observation ---
+  source:
+    range: string
+  observed_at:
+    range: datetime
+  numeric_value:
+    range: float
+  aggregation:
+    range: string
+  period:
+    description: Period label of an aggregate, e.g. 2026-11-04 or 2026-W45.
+    range: string
+  revision:
+    range: integer
+  payload_ref:
+    range: string
+
+classes:
+  Expectation:
+    mixin: true
+    description: A measurable expectation evaluated by the hub.
+    slots:
+      - series_code
+      - comparator
+      - target_value
+      - target_upper
+      - unit
+      - reducer
+      - window_start
+      - window_end
+      - baseline_value
+      - outcome
+      - health
+      - last_value
+      - last_observed_at
+      - evaluated_at
+  Observation:
+    mixin: true
+    description: >-
+      An observation from an external source. The host class must offer kind
+      values metric, feedback, incident and update, and an `about` edge.
+    slots:
+      - source
+      - observed_at
+      - series_code
+      - numeric_value
+      - unit
+      - aggregation
+      - period
+      - revision
+      - payload_ref
+    annotations:
+      required_kind_values: metric,feedback,incident,update
+      required_edge: about
