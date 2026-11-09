@@ -18,18 +18,20 @@ GENERATED_DIR = PACKAGE_DIR / "generated"
 MODULES = {"impact": PACKAGE_DIR / "ontology" / "modules" / "impact.fragment.yaml"}
 
 
-def load(modules: Sequence[str] = ()) -> OntologyModel:
-    return load_ontology(ONTOLOGY_PATH, [MODULES[m] for m in modules])
+def load(modules: Sequence[str] = (), extensions: Sequence[str] = ()) -> OntologyModel:
+    """The workgraph ontology, optional bundled modules and user extensions (YAML text)."""
+    return load_ontology(ONTOLOGY_PATH, [MODULES[m] for m in modules], extensions)
 
 
 def build_core(
     store: GraphStore,
     hooks: Sequence[Hook] = (),
     modules: Sequence[str] = (),
+    extensions: Sequence[str] = (),
     **kwargs: object,
 ) -> GraphCore:
-    """GraphCore wired with the workgraph ontology and policy."""
-    return GraphCore(load(modules), store, WorkgraphPolicy(), hooks, **kwargs)  # type: ignore[arg-type]
+    """GraphCore wired with the workgraph ontology (plus extensions) and policy."""
+    return GraphCore(load(modules, extensions), store, WorkgraphPolicy(), hooks, **kwargs)  # type: ignore[arg-type]
 
 
 __all__ = ["GENERATED_DIR", "MIXINS_PATH", "ONTOLOGY_PATH", "WorkgraphPolicy", "build_core", "load"]

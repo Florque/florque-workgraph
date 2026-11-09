@@ -20,9 +20,15 @@ class EventBus:
         self._subs.append(fn)
 
     def publish(
-        self, type: str, node_id: str | None, payload: dict[str, Any], origin: str = ORIGIN
+        self,
+        type: str,
+        node_id: str | None,
+        payload: dict[str, Any],
+        origin: str = ORIGIN,
+        store: HubStore | None = None,
     ) -> dict[str, Any]:
-        evt = self.store.event_add(type, node_id, origin, payload)
+        """Record and fan out an event; ``store`` selects the tenant view to record it in."""
+        evt = (store or self.store).event_add(type, node_id, origin, payload)
         for fn in self._subs:
             if evt.get("origin") == ORIGIN and getattr(fn, "ignore_own", False):
                 continue

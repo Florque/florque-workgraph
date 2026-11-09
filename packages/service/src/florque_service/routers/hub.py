@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from florque_graph_core import Principal
 from pydantic import BaseModel, Field
 
-from florque_service.state import ServiceState, principal, respond, state
+from florque_service.state import ServiceState, ingest_principal, principal, respond, state
 
 router = APIRouter(prefix="/v1/hub")
 
@@ -48,7 +48,7 @@ class EvaluateBody(BaseModel):
 @router.post("/observations")
 def ingest(
     observation: dict[str, Any] = Body(...),
-    p: Principal = Depends(principal),
+    p: Principal = Depends(ingest_principal),
     st: ServiceState = Depends(state),
 ) -> JSONResponse:
     return respond(st, st.app.call(p, "hub_ingest", observation=observation), 202)

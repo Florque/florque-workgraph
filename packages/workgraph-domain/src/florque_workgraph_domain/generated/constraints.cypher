@@ -9,6 +9,7 @@ CREATE CONSTRAINT project_dedupe_unique IF NOT EXISTS FOR (n:Project) REQUIRE n.
 CREATE CONSTRAINT signal_dedupe_unique IF NOT EXISTS FOR (n:Signal) REQUIRE (n.project_id, n.dedupe_key) IS UNIQUE;
 CREATE CONSTRAINT workitem_dedupe_unique IF NOT EXISTS FOR (n:WorkItem) REQUIRE (n.project_id, n.dedupe_key) IS UNIQUE;
 CREATE INDEX node_project_id IF NOT EXISTS FOR (n:Node) ON (n.project_id);
+CREATE INDEX node_tenant_id IF NOT EXISTS FOR (n:Node) ON (n.tenant_id);
 CREATE INDEX node_status IF NOT EXISTS FOR (n:Node) ON (n.status);
 CREATE INDEX node_series_code IF NOT EXISTS FOR (n:Node) ON (n.series_code);
 CREATE INDEX node_observed_at IF NOT EXISTS FOR (n:Node) ON (n.observed_at);

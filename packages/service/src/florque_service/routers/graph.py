@@ -9,7 +9,14 @@ from fastapi.responses import JSONResponse
 from florque_graph_core import Principal
 from pydantic import BaseModel, Field
 
-from florque_service.state import ServiceState, principal, respond, state
+from florque_service.state import (
+    AuthError,
+    ServiceState,
+    optional_principal,
+    principal,
+    respond,
+    state,
+)
 
 router = APIRouter(prefix="/v1")
 
@@ -71,11 +78,74 @@ class ListBody(BaseModel):
     include_archived: bool = False
 
 
+class ExtensionBody(BaseModel):
+    yaml: str = Field(max_length=64 * 1024)
+    project_id: str | None = None
+
+
 @router.get("/ontology")
-def ontology(st: ServiceState = Depends(state)) -> JSONResponse:
-    # Public: version and card only, so clients can detect drift before authenticating.
-    env = st.app.call(_anonymous(), "describe")
-    return respond(st, env)
+def ontology(
+    project_id: str | None = None,
+    p: Principal | None = Depends(optional_principal),
+    st: ServiceState = Depends(state),
+) -> JSONResponse:
+    """The effective ontology: of a project, of the caller's tenant, or (anonymous) the base.
+
+    Anonymous access stays open so clients can detect version drift before authenticating."""
+    if p is None:
+        if project_id is not None:
+            raise AuthError("project ontologies need a token")
+        return respond(st, st.app.call(_anonymous(), "describe"))
+    return respond(st, st.app.call(p, "describe", project_id=project_id))
+
+
+@router.get("/ontology/extensions")
+def extensions(
+    project_id: str | None = None,
+    include_retired: bool = False,
+    p: Principal = Depends(principal),
+    st: ServiceState = Depends(state),
+) -> JSONResponse:
+    return respond(
+        st,
+        st.app.call(
+            p, "ontology_extensions", project_id=project_id, include_retired=include_retired
+        ),
+    )
+
+
+@router.post("/ontology/extensions:validate")
+def validate_extension(
+    body: ExtensionBody, p: Principal = Depends(principal), st: ServiceState = Depends(state)
+) -> JSONResponse:
+    return respond(
+        st, st.app.call(p, "ontology_validate", yaml=body.yaml, project_id=body.project_id)
+    )
+
+
+@router.post("/ontology/extensions")
+def add_extension(
+    body: ExtensionBody, p: Principal = Depends(principal), st: ServiceState = Depends(state)
+) -> JSONResponse:
+    return respond(
+        st, st.app.call(p, "ontology_add", yaml=body.yaml, project_id=body.project_id), 201
+    )
+
+
+@router.delete("/ontology/extensions/{ext_id}")
+def retire_extension(
+    ext_id: str, p: Principal = Depends(principal), st: ServiceState = Depends(state)
+) -> JSONResponse:
+    return respond(st, st.app.call(p, "ontology_retire", id=ext_id))
+
+
+@router.get("/projects")
+def projects(
+    include_archived: bool = False,
+    p: Principal = Depends(principal),
+    st: ServiceState = Depends(state),
+) -> JSONResponse:
+    return respond(st, st.app.call(p, "projects", include_archived=include_archived))
 
 
 def _anonymous() -> Principal:

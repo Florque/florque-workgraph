@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import json
 import sqlite3
 import threading
@@ -116,6 +117,23 @@ class SQLiteHubStore:
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+    # ------------------------------------------------------------------ tenancy
+
+    def scoped(self, tenant_id: str) -> SQLiteHubStore:
+        """A view of the same database restricted to one tenant (shares the connection)."""
+        if tenant_id == self.tenant_id:
+            return self
+        view = copy.copy(self)
+        view.tenant_id = tenant_id
+        return view
+
+    def tenants(self) -> list[str]:
+        """Tenants that have registry data."""
+        rows = self._all(
+            "SELECT tenant_id FROM sources UNION SELECT tenant_id FROM sensors ORDER BY 1"
+        )
+        return [r["tenant_id"] for r in rows]
 
     # ------------------------------------------------------------------ registry
 

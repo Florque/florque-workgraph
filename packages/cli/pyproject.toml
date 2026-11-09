@@ -1,11 +1,16 @@
 [project]
 name = "florque-cli"
-version = "0.1.0"
+version = "0.2.0"
+description = "fwg: the Florque Workgraph CLI for agents and humans"
 requires-python = ">=3.11"
 dependencies = [
-  "florque-client",
+  "florque-client>=0.2.0",
   "typer>=0.12",
 ]
+
+[project.optional-dependencies]
+# Local mode (graph on this machine) needs the whole engine.
+local = ["florque-client[local]"]
 
 [build-system]
 requires = ["hatchling"]

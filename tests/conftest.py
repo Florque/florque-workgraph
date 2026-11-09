@@ -17,6 +17,17 @@ from florque_workgraph_domain import build_core, load
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_env(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tests never read the developer's credentials or FLORQUE_* settings."""
+    for var in list(os.environ):
+        if var.startswith("FLORQUE_") and var not in ("FLORQUE_TEST_NEO4J",):
+            monkeypatch.delenv(var)
+    monkeypatch.setenv("FLORQUE_CREDENTIALS", str(tmp_path_factory.mktemp("creds") / "c.json"))
+
+
 class Clock:
     def __init__(self, now: datetime = NOW) -> None:
         self.now = now

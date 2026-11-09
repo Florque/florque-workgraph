@@ -1,0 +1,17 @@
+{
+  "description": "Tell the agent which Florque project this folder is bound to (or ask the user to pick one).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v fwg >/dev/null 2>&1; then fwg session-context; else echo '## Florque Workgraph'; echo 'The fwg CLI is not installed. If the user wants the workgraph, ask them to install it: uv tool install florque-cli (see the invite email).'; fi",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

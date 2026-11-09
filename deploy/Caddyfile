@@ -1,0 +1,28 @@
+# TLS certificates are issued automatically for FLORQUE_DOMAIN (ports 80/443 must be open).
+{$FLORQUE_DOMAIN} {
+	encode zstd gzip
+
+	# Prometheus metrics are for the server only: curl from the host via `docker compose exec`.
+	@internal path /metrics /metrics/*
+	respond @internal 404
+
+	# CLI wheels: uv tool install florque-cli --find-links https://{$FLORQUE_DOMAIN}/dist/
+	handle_path /dist/* {
+		root * /srv/dist
+		file_server browse
+	}
+
+	handle {
+		reverse_proxy service:8000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	log {
+		output stdout
+		format json
+	}
+}

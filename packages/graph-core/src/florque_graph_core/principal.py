@@ -15,6 +15,9 @@ class Principal:
     """Role per project id. The key "*" applies to every project."""
     is_agent: bool = False
     can_create_projects: bool = False
+    tenant_id: str | None = None
+    """When set, the principal only ever sees nodes of this tenant (roles apply inside it).
+    None means an unscoped principal: local mode, or a system principal such as the hub."""
 
     def role_in(self, project_id: str | None) -> str | None:
         if project_id is not None and project_id in self.roles:

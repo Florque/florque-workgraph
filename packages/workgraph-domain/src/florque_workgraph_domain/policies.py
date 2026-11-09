@@ -48,18 +48,18 @@ class WorkgraphPolicy:
     def initial_status(
         self, role: str | None, is_agent: bool, cls: str, kind: str | None, requested: str | None
     ) -> str:
-        if role == "contributor" and is_agent:
-            return "proposed"  # agent writes start as proposed; an admin accepts them
+        if is_agent and role in WRITERS:
+            return "proposed"  # agent writes start as proposed, whatever the role; a human accepts them
         if role == "hub":
             return requested or "active"
         return requested or "proposed"
 
     def check_transition(
-        self, role: str | None, node: dict[str, Any], new_status: str
+        self, role: str | None, node: dict[str, Any], new_status: str, is_agent: bool = False
     ) -> str | None:
         current = node.get("status", "proposed")
-        if current == "proposed" and new_status != "proposed" and role != "admin":
-            return "Only a project admin accepts proposals (proposed -> active/done)."
+        if current == "proposed" and new_status != "proposed" and (role != "admin" or is_agent):
+            return "Only a human project admin accepts proposals (proposed -> active/done)."
         if current == "done" and new_status in ("proposed", "active") and role != "admin":
             return "Only a project admin reopens finished work."
         return None

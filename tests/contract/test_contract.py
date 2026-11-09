@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from florque_client import Client, HttpClient, LocalClient, build_app
 from florque_graph_core.store.memory import MemoryStore
-from florque_service import TokenStore, create_app
+from florque_service import IdentityStore, create_app
 from florque_signal_hub import SQLiteHubStore
 
 from tests.conftest import ADMIN, KR_PROPS, Clock
@@ -21,7 +21,7 @@ def client(request: pytest.FixtureRequest, clock: Clock) -> Iterator[Client]:
     if request.param == "local":
         yield LocalClient(app, ADMIN)
         return
-    tokens = TokenStore()
+    tokens = IdentityStore()
     token = tokens.issue("alice", {"*": "admin"}, can_create_projects=True)["token"]
     with TestClient(create_app(app, tokens, scheduler=False)) as tc:
         yield HttpClient(http=tc, token=token)

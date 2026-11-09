@@ -28,6 +28,7 @@ from florque_signal_hub.lane2 import Associator, NoAssociator
 from florque_signal_hub.store.repository import HubStore, StoreConflict
 
 HUB_ACTOR = "hub"
+DEFAULT_TENANT = "default"  # registry scope of unscoped principals (local mode, operators)
 EVALUATED_STATUSES = ("active",)
 FINAL = {"succeeded", "failed", "expired"}
 
@@ -64,10 +65,23 @@ class SignalHub:
         self.contract: Contract = verify_contract(core.describe())
         self.events = EventBus(store)
 
+    # ------------------------------------------------------------------ tenancy
+
+    @staticmethod
+    def tenant_of(actor: Principal) -> str:
+        return actor.tenant_id or DEFAULT_TENANT
+
+    def _store(self, tenant: str | None) -> HubStore:
+        return self.store.scoped(tenant or DEFAULT_TENANT)
+
+    def _node_tenant(self, node_id: str) -> str:
+        node = self.core.get(self.principal, node_id, depth=0)["node"]
+        return node.get("tenant_id") or DEFAULT_TENANT
+
     # ------------------------------------------------------------------ permissions
 
     def _require_admin(self, actor: Principal, project_id: str | None = None) -> None:
-        role = actor.role_in(project_id) if project_id else self.core.role(actor, None)
+        role = self.core.role(actor, project_id)
         if role != "admin":
             raise GraphError(
                 ErrorCode.FORBIDDEN,
@@ -88,7 +102,7 @@ class SignalHub:
         code = ctx.patch.get("series_code")
         if code is None:
             return
-        sensor = self.store.sensor_by_code(code)
+        sensor = self._store(ctx.tenant_id).sensor_by_code(code)
         if sensor is None:
             raise GraphError(
                 ErrorCode.ONTOLOGY_VIOLATION,
@@ -121,24 +135,26 @@ class SignalHub:
         config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self._require_admin(actor)
+        st = self._store(actor.tenant_id)
         try:
-            row = self.store.add_source(id, kind, name, config or {})
+            row = st.add_source(id, kind, name, config or {})
         except StoreConflict as e:
             raise GraphError(
                 ErrorCode.DUPLICATE_EXACT, f"Source {id!r} exists", hint="Reuse it."
             ) from e
-        self.store.audit(actor.actor_id, "source.add", id, {"kind": kind})
+        st.audit(actor.actor_id, "source.add", id, {"kind": kind})
         return {"source": row}
 
     def list_sources(self, actor: Principal) -> dict[str, Any]:
         self._require_member(actor)
-        return {"sources": self.store.list_sources()}
+        return {"sources": self._store(actor.tenant_id).list_sources()}
 
     def archive_source(self, actor: Principal, id: str) -> dict[str, Any]:
         self._require_admin(actor)
-        if not self.store.archive_source(id):
+        st = self._store(actor.tenant_id)
+        if not st.archive_source(id):
             raise GraphError(ErrorCode.NOT_FOUND, f"Source {id!r} not found")
-        self.store.audit(actor.actor_id, "source.archive", id, {})
+        st.audit(actor.actor_id, "source.archive", id, {})
         return {"archived": id}
 
     def add_sensor(
@@ -152,15 +168,16 @@ class SignalHub:
         description: str | None = None,
     ) -> dict[str, Any]:
         self._require_admin(actor, project_id)
-        self.core.get(actor, project_id, depth=0)  # project must exist and be visible
-        if source_id and self.store.get_source(source_id) is None:
+        project = self.core.get(actor, project_id, depth=0)["node"]  # must exist and be visible
+        st = self._store(project.get("tenant_id"))
+        if source_id and st.get_source(source_id) is None:
             raise GraphError(
                 ErrorCode.NOT_FOUND,
                 f"Source {source_id!r} not registered",
                 hint="fwg hub source add first.",
             )
         try:
-            row = self.store.add_sensor(
+            row = st.add_sensor(
                 {
                     "series_code": series_code,
                     "project_id": project_id,
@@ -176,20 +193,21 @@ class SignalHub:
                 f"series_code {series_code!r} is already registered",
                 hint="Reuse the sensor.",
             ) from e
-        self.store.audit(actor.actor_id, "sensor.add", series_code, {"project_id": project_id})
+        st.audit(actor.actor_id, "sensor.add", series_code, {"project_id": project_id})
         return {"sensor": row}
 
     def list_sensors(self, actor: Principal, project_id: str | None = None) -> dict[str, Any]:
         self._require_member(actor, project_id)
-        return {"sensors": self.store.list_sensors(project_id)}
+        return {"sensors": self._store(actor.tenant_id).list_sensors(project_id)}
 
     def archive_sensor(self, actor: Principal, sensor_id: str) -> dict[str, Any]:
-        sensor = next((s for s in self.store.list_sensors() if s["id"] == sensor_id), None)
+        st = self._store(actor.tenant_id)
+        sensor = next((s for s in st.list_sensors() if s["id"] == sensor_id), None)
         if sensor is None:
             raise GraphError(ErrorCode.NOT_FOUND, f"Sensor {sensor_id!r} not found")
         self._require_admin(actor, sensor["project_id"])
-        self.store.archive_sensor(sensor_id)
-        self.store.audit(actor.actor_id, "sensor.archive", sensor_id, {})
+        st.archive_sensor(sensor_id)
+        st.audit(actor.actor_id, "sensor.archive", sensor_id, {})
         return {"archived": sensor_id}
 
     def add_binding(self, actor: Principal, kind: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -200,20 +218,21 @@ class SignalHub:
             node = self.core.get(actor, row["node_id"], depth=0)["node"]
             project_id = node.get("project_id")
         self._require_admin(actor, project_id)
+        st = self._store(actor.tenant_id)
         try:
-            out = self.store.add_binding(kind, row)
+            out = st.add_binding(kind, row)
         except StoreConflict as e:
             raise GraphError(ErrorCode.DUPLICATE_EXACT, "Binding exists") from e
-        self.store.audit(actor.actor_id, f"binding.{kind}.add", out["id"], row)
+        st.audit(actor.actor_id, f"binding.{kind}.add", out["id"], row)
         return {"binding": out}
 
     def list_bindings(self, actor: Principal, kind: str) -> dict[str, Any]:
         self._require_member(actor)
-        return {"bindings": self.store.list_bindings(kind)}
+        return {"bindings": self._store(actor.tenant_id).list_bindings(kind)}
 
     def archive_binding(self, actor: Principal, kind: str, binding_id: str) -> dict[str, Any]:
         self._require_admin(actor)
-        if not self.store.archive_binding(kind, binding_id):
+        if not self._store(actor.tenant_id).archive_binding(kind, binding_id):
             raise GraphError(ErrorCode.NOT_FOUND, f"Binding {binding_id!r} not found")
         return {"archived": binding_id}
 
@@ -232,26 +251,28 @@ class SignalHub:
         if self.core.role(actor, None) not in ("hub", "admin"):
             raise GraphError(ErrorCode.FORBIDDEN, "Only the hub or an admin may push observations")
         env = obs.model_dump(mode="json")
+        st = self._store(actor.tenant_id)
         try:
-            ledger = self.store.ledger_insert(obs.source_id, obs.external_id, env)
+            ledger = st.ledger_insert(obs.source_id, obs.external_id, env)
         except StoreConflict:
-            prev = self.store.ledger_get(obs.source_id, obs.external_id) or {}
+            prev = st.ledger_get(obs.source_id, obs.external_id) or {}
             return {
                 "status": "duplicate",
                 "ledger_id": prev.get("id"),
                 "signal_id": prev.get("signal_id"),
             }
 
-        if self.store.get_source(obs.source_id) is None:
-            return self._to_inbox(ledger["id"], "unknown_source", env)
+        if st.get_source(obs.source_id) is None:
+            return self._to_inbox(st, ledger["id"], "unknown_source", env)
         if not obs.subject_code:
             assoc = self.associator.associate(obs, "")
-            return self._to_inbox(ledger["id"], "no_subject_code", env, assoc.candidates)
-        sensor = self.store.sensor_by_code(obs.subject_code)
+            return self._to_inbox(st, ledger["id"], "no_subject_code", env, assoc.candidates)
+        sensor = st.sensor_by_code(obs.subject_code)
         if sensor is None:
-            return self._to_inbox(ledger["id"], "unregistered_code", env)  # the hub never guesses
+            # the hub never guesses
+            return self._to_inbox(st, ledger["id"], "unregistered_code", env)
         if obs.type == "metric" and obs.unit and obs.unit != sensor["unit"]:
-            return self._to_inbox(ledger["id"], "unit_mismatch", env)
+            return self._to_inbox(st, ledger["id"], "unit_mismatch", env)
 
         project_id = sensor["project_id"]
         expectations = self._expectations(project_id, obs.subject_code)
@@ -260,23 +281,28 @@ class SignalHub:
         ]
         try:
             if obs.type == "metric":
-                result = self._write_metric(obs, sensor, project_id, about)
+                result = self._write_metric(st, obs, sensor, project_id, about)
             else:
                 result = self._write_signal(obs, project_id, about)
         except GraphError as e:
-            self.store.ledger_update(ledger["id"], "rejected", detail=f"{e.code}: {e.message}")
+            st.ledger_update(ledger["id"], "rejected", detail=f"{e.code}: {e.message}")
             raise
-        self.store.ledger_update(ledger["id"], result["status"], signal_id=result.get("signal_id"))
+        st.ledger_update(ledger["id"], result["status"], signal_id=result.get("signal_id"))
         evaluations = []
         if obs.type == "metric":
             evaluations = [self.evaluate_one(exp["id"]) for exp in expectations]
         return {**result, "ledger_id": ledger["id"], "evaluations": evaluations}
 
     def _to_inbox(
-        self, ledger_id: str, reason: str, env: dict[str, Any], candidates: list[Any] | None = None
+        self,
+        st: HubStore,
+        ledger_id: str,
+        reason: str,
+        env: dict[str, Any],
+        candidates: list[Any] | None = None,
     ) -> dict[str, Any]:
-        item = self.store.inbox_add(ledger_id, reason, env, candidates or [])
-        self.store.ledger_update(ledger_id, "inbox", detail=reason)
+        item = st.inbox_add(ledger_id, reason, env, candidates or [])
+        st.ledger_update(ledger_id, "inbox", detail=reason)
         return {"status": "inbox", "reason": reason, "inbox_id": item["id"], "ledger_id": ledger_id}
 
     def _expectations(self, project_id: str, series_code: str) -> list[dict[str, Any]]:
@@ -295,7 +321,12 @@ class SignalHub:
             return ZoneInfo(self.config.default_time_zone)
 
     def _write_metric(
-        self, obs: Observation, sensor: dict[str, Any], project_id: str, about: list[dict[str, Any]]
+        self,
+        st: HubStore,
+        obs: Observation,
+        sensor: dict[str, Any],
+        project_id: str,
+        about: list[dict[str, Any]],
     ) -> dict[str, Any]:
         cls = self.contract.observation_class
         tz = self._tz(project_id)
@@ -321,7 +352,7 @@ class SignalHub:
             if node.get("numeric_value") == obs.value:
                 return {"status": "unchanged", "signal_id": node["id"]}
             res = self.core.supersede(self.principal, node["id"], fields, origin=ORIGIN)
-            self.store.audit(
+            st.audit(
                 self.principal.actor_id,
                 "metric.correction",
                 code,
@@ -372,12 +403,13 @@ class SignalHub:
 
     def inbox(self, actor: Principal, status: str | None = "open") -> dict[str, Any]:
         self._require_member(actor)
-        return {"items": self.store.inbox_list(status)}
+        return {"items": self._store(actor.tenant_id).inbox_list(status)}
 
     def resolve_inbox(
         self, actor: Principal, inbox_id: str, action: str, node_id: str | None = None
     ) -> dict[str, Any]:
-        item = self.store.inbox_get(inbox_id)
+        st = self._store(actor.tenant_id)
+        item = st.inbox_get(inbox_id)
         if item is None or item["status"] != "open":
             raise GraphError(ErrorCode.NOT_FOUND, f"Open inbox item {inbox_id!r} not found")
         if action not in ("attach", "dismiss"):
@@ -415,12 +447,10 @@ class SignalHub:
             )
             result["signal_id"] = res["node"]["id"]
             if item.get("ledger_id"):
-                self.store.ledger_update(item["ledger_id"], "accepted", signal_id=res["node"]["id"])
-        self.store.inbox_resolve(
-            inbox_id, action if not node_id else f"{action}:{node_id}", actor.actor_id
-        )
-        self.store.match_feedback_add(inbox_id, node_id, action, actor.actor_id)
-        self.store.audit(actor.actor_id, "inbox.resolve", inbox_id, result)
+                st.ledger_update(item["ledger_id"], "accepted", signal_id=res["node"]["id"])
+        st.inbox_resolve(inbox_id, action if not node_id else f"{action}:{node_id}", actor.actor_id)
+        st.match_feedback_add(inbox_id, node_id, action, actor.actor_id)
+        st.audit(actor.actor_id, "inbox.resolve", inbox_id, result)
         return result
 
     # ------------------------------------------------------------------ evaluation
@@ -493,8 +523,13 @@ class SignalHub:
                 "reason": ev.reason,
                 "series_code": exp["series_code"],
             }
-            self.events.publish("expectation.outcome_changed", node_id, payload)
-            self.store.audit(self.principal.actor_id, "expectation.outcome", node_id, payload)
+            tenant = exp.get("tenant_id") or DEFAULT_TENANT
+            self.events.publish(
+                "expectation.outcome_changed", node_id, payload, store=self._store(tenant)
+            )
+            self._store(tenant).audit(
+                self.principal.actor_id, "expectation.outcome", node_id, payload
+            )
         return {
             "node_id": node_id,
             "outcome": ev.outcome,
@@ -515,10 +550,27 @@ class SignalHub:
     # ------------------------------------------------------------------ reconciliation
 
     def reconcile(self) -> dict[str, Any]:
-        """Report unregistered codes, unused sensors and bindings to archived nodes. Flags; never deletes."""
-        sensors = self.store.list_sensors()
+        """Report unregistered codes, unused sensors and bindings to archived nodes, per tenant.
+        Flags; never deletes."""
+        all_exps = self.core.find_by_mixin(self.principal, "Expectation", None, None)["nodes"]
+        by_tenant: dict[str, list[dict[str, Any]]] = {}
+        for e in all_exps:
+            by_tenant.setdefault(e.get("tenant_id") or DEFAULT_TENANT, []).append(e)
+        tenants = sorted({*self.store.tenants(), *by_tenant})
+        reports = {t: self._reconcile_tenant(t, by_tenant.get(t, [])) for t in tenants}
+        return {
+            "unregistered_codes": sorted(
+                {c for r in reports.values() for c in r["unregistered_codes"]}
+            ),
+            "unused_sensors": sorted({c for r in reports.values() for c in r["unused_sensors"]}),
+            "archived_bindings": [b for r in reports.values() for b in r["archived_bindings"]],
+            "tenants": reports,
+        }
+
+    def _reconcile_tenant(self, tenant: str, exps: list[dict[str, Any]]) -> dict[str, Any]:
+        st = self._store(tenant)
+        sensors = st.list_sensors()
         codes = {s["series_code"] for s in sensors}
-        exps = self.core.find_by_mixin(self.principal, "Expectation", None, None)["nodes"]
         used = {e.get("series_code") for e in exps if e.get("series_code")}
         unregistered = sorted(
             {
@@ -533,23 +585,23 @@ class SignalHub:
             if flag:
                 unused.append(s["series_code"])
             if s.get("flag") != flag:
-                self.store.flag_sensor(s["id"], flag)
+                st.flag_sensor(s["id"], flag)
         stale_bindings = []
-        for b in self.store.list_bindings("thread"):
+        for b in st.list_bindings("thread"):
             try:
                 node = self.core.get(self.principal, b["node_id"], depth=0)["node"]
                 gone = node.get("status") == "archived"
             except GraphError:
                 gone = True
             if gone:
-                self.store.archive_binding("thread", b["id"], flag="target_archived")
+                st.archive_binding("thread", b["id"], flag="target_archived")
                 stale_bindings.append(b["id"])
         report = {
             "unregistered_codes": unregistered,
             "unused_sensors": unused,
             "archived_bindings": stale_bindings,
         }
-        self.store.audit(self.principal.actor_id, "reconcile", None, report)
+        st.audit(self.principal.actor_id, "reconcile", None, report)
         return report
 
     # ------------------------------------------------------------------ jobs

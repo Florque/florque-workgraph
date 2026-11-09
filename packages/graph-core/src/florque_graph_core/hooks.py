@@ -23,6 +23,7 @@ class WriteContext:
     model: OntologyModel
     tx: StoreTx
     project_id: str | None = None
+    tenant_id: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

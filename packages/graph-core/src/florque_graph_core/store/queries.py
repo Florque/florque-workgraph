@@ -46,7 +46,7 @@ def constraint_statements(model: OntologyModel) -> list[str]:
                 f"CREATE CONSTRAINT {name.lower()}_dedupe_unique IF NOT EXISTS "
                 f"FOR (n:{name}) REQUIRE (n.project_id, n.dedupe_key) IS UNIQUE"
             )
-    for prop in ("project_id", "status", "series_code", "observed_at"):
+    for prop in ("project_id", "tenant_id", "status", "series_code", "observed_at"):
         out.append(f"CREATE INDEX node_{prop} IF NOT EXISTS FOR (n:Node) ON (n.{prop})")
     out.append(
         "CREATE INDEX changelog_project_seq IF NOT EXISTS FOR (c:_ChangeLog) ON (c.project_id, c.seq)"

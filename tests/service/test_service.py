@@ -4,14 +4,14 @@ import pytest
 from fastapi.testclient import TestClient
 from florque_client import build_app
 from florque_graph_core.store.memory import MemoryStore
-from florque_service import TokenStore, create_app
+from florque_service import IdentityStore, create_app
 from florque_signal_hub import SQLiteHubStore
 
 
 @pytest.fixture
-def svc() -> Iterator[tuple[TestClient, TokenStore]]:
+def svc() -> Iterator[tuple[TestClient, IdentityStore]]:
     app = build_app(graph_store=MemoryStore(), hub_store=SQLiteHubStore())
-    tokens = TokenStore()
+    tokens = IdentityStore()
     with TestClient(create_app(app, tokens, scheduler=False)) as tc:
         yield tc, tokens
 
@@ -94,5 +94,5 @@ def test_token_cli(tmp_path, monkeypatch, capsys):
     main(["token", "issue", "--actor", "alice", "--role", "*=admin", "--create-projects"])
     out = capsys.readouterr().out
     assert '"token": "fwg_' in out
-    store = TokenStore(str(tmp_path / "svc.sqlite"))
+    store = IdentityStore(str(tmp_path / "svc.sqlite"))
     assert store.list()[0]["actor_id"] == "alice"

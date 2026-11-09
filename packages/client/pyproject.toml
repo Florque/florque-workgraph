@@ -1,13 +1,19 @@
 [project]
 name = "florque-client"
-version = "0.1.0"
+version = "0.2.0"
+description = "Florque Workgraph client: HTTP by default, in-process engine with the [local] extra"
 requires-python = ">=3.11"
 dependencies = [
+  "httpx>=0.27",
+  "PyYAML>=6",
+]
+
+[project.optional-dependencies]
+# In-process (local mode) wiring of graph-core, the domain ontology and the signal hub.
+local = [
   "florque-graph-core",
   "florque-workgraph-domain",
   "florque-signal-hub",
-  "httpx>=0.27",
-  "PyYAML>=6",
 ]
 
 [build-system]

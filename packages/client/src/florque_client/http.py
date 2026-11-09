@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import metadata
 from typing import Any
 from urllib.parse import quote
 
@@ -12,6 +13,24 @@ from florque_client.base import Client
 
 def _q(s: str) -> str:
     return quote(s, safe="")
+
+
+def _version_tuple(v: str) -> tuple[int, ...]:
+    out = []
+    for part in v.split("+")[0].split("."):
+        digits = "".join(ch for ch in part if ch.isdigit())
+        out.append(int(digits) if digits else 0)
+    return tuple(out)
+
+
+def _older(version: str, minimum: str) -> bool:
+    return _version_tuple(version) < _version_tuple(minimum)
+
+
+try:
+    CLIENT_VERSION = metadata.version("florque-client")
+except metadata.PackageNotFoundError:
+    CLIENT_VERSION = "0.0.0"
 
 
 class HttpClient(Client):
@@ -50,7 +69,7 @@ class HttpClient(Client):
                 },
             }
         try:
-            return r.json()  # type: ignore[no-any-return]
+            env: dict[str, Any] = r.json()
         except ValueError:
             return {
                 "ok": False,
@@ -61,10 +80,45 @@ class HttpClient(Client):
                     "details": {},
                 },
             }
+        minimum = r.headers.get("x-florque-min-client")
+        if minimum and isinstance(env, dict) and _older(CLIENT_VERSION, minimum):
+            env["client_warning"] = (
+                f"This client is {CLIENT_VERSION}; the server needs {minimum} or newer. "
+                "Upgrade with: uv tool upgrade florque-cli"
+            )
+        return env
 
     def _call(self, op: str, **a: Any) -> dict[str, Any]:  # noqa: C901 - a flat routing table
         if op == "describe":
-            return self._req("GET", "/v1/ontology")
+            return self._req("GET", "/v1/ontology", params={"project_id": a.get("project_id")})
+        if op == "projects":
+            return self._req(
+                "GET", "/v1/projects", params={"include_archived": a.get("include_archived")}
+            )
+        if op == "ontology_extensions":
+            return self._req("GET", "/v1/ontology/extensions", params=a)
+        if op == "ontology_validate":
+            return self._req("POST", "/v1/ontology/extensions:validate", json=a)
+        if op == "ontology_add":
+            return self._req("POST", "/v1/ontology/extensions", json=a)
+        if op == "ontology_retire":
+            return self._req("DELETE", f"/v1/ontology/extensions/{_q(a['id'])}")
+        if op == "auth_register":
+            return self._req("POST", "/v1/auth/register", json=a)
+        if op == "auth_login":
+            return self._req("POST", "/v1/auth/login", json=a)
+        if op == "auth_verify":
+            return self._req("POST", "/v1/auth/verify", json=a)
+        if op == "auth_me":
+            return self._req("GET", "/v1/auth/me")
+        if op == "auth_tokens":
+            return self._req("GET", "/v1/auth/tokens")
+        if op == "auth_token_create":
+            return self._req("POST", "/v1/auth/tokens", json=a)
+        if op == "auth_token_revoke":
+            return self._req("DELETE", f"/v1/auth/tokens/{_q(a['token_id'])}")
+        if op == "auth_invite":
+            return self._req("POST", "/v1/auth/invites", json=a)
         if op == "get":
             return self._req(
                 "GET", f"/v1/nodes/{_q(a['node_id'])}", params={"depth": a.get("depth", 1)}

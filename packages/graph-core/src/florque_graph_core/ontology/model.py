@@ -13,6 +13,7 @@ SYSTEM_FIELDS = (
     "id",
     "class",
     "project_id",
+    "tenant_id",
     "created_at",
     "updated_at",
     "version",
@@ -125,6 +126,9 @@ class OntologyModel:
     global_slots: dict[str, SlotSpec]
     root_class: str
     source_paths: tuple[str, ...] = ()
+    base_version: str = ""
+    extensions: tuple[str, ...] = ()
+    """Labels (name@version) of the user extensions compiled into this model."""
 
     def concrete(self) -> list[ClassSpec]:
         return [c for c in self.classes.values() if not c.abstract]
@@ -152,6 +156,8 @@ class OntologyModel:
         return {
             "name": self.name,
             "version": self.version,
+            "base_version": self.base_version or self.version,
+            "extensions": list(self.extensions),
             "mixins_version": self.mixins_version,
             "root_class": self.root_class,
             "classes": {

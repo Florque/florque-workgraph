@@ -173,6 +173,18 @@ LinkML annotations are free-form, so the engine owns the list and rejects unknow
 
 The workgraph-impact fragment adds Component, Risk, Period, Commitment and Area, with edges touches, relies\_on, planned\_in, in\_area, threatens, mitigated\_by and rests\_on. It enables the blast\_radius, collision, slip\_alert and plan\_check recipes. Adopt one module at a time, starting with Components and Areas.
 
+### 4.9 Tenant and project extensions
+
+The base ontology is shared. A tenant can extend it for all of its projects, and a project can extend it further. An extension is a small LinkML fragment sent as YAML through `fwg ontology add` (or `POST /v1/ontology/extensions`), and the change can only add to the base:
+
+- **Allowed keys:** `id`, `name`, `version`, `description`, `imports`, `prefixes`, `default_prefix`, `classes`, `slots`, `enums`. The only allowed import is `linkml:types`; the fragment is parsed from memory and never reads files or the network. At most 64 KiB.
+- **New classes and slots:** allowed. A placeable class or kind must declare `allowed_parent`.
+- **Enums:** an extension may add values to the base schema's own enums, but not to mixin contract enums. It cannot change or remove anything that already exists.
+- **Effective version:** `0.2.0+<name>@<version>[+...]`. It is returned in every envelope, so clients notice drift.
+- **Activation:** an extension is activated only after it compiles, the mixin contract still holds, and a dry run of the existing nodes in its scope passes. A retire is refused while nodes still need the extension.
+
+Extensions are stored per (tenant, project or tenant-wide) in `ontologies.sqlite`. The service builds one graph-core per distinct extension set and caches it.
+
 ## 5. florque-graph-core python app
 
 Purpose: execute CRUD against a graph database and validate everything against an ontology injected from outside. It contains no domain knowledge.
@@ -316,8 +328,11 @@ Purpose: expose the system over HTTP and run the workers.
 
 | Endpoint | Purpose |
 | --- | --- |
-| GET /v1/ontology | Version and card |
-| POST /v1/projects | Create a Project root |
+| GET /v1/ontology?project\_id= | Version and card (with that project's extensions) |
+| GET, POST /v1/ontology/extensions, POST :validate, DELETE /{id} | Tenant/project ontology extensions (4.9) |
+| GET /v1/projects, POST /v1/projects | List the caller's projects, create a Project root |
+| POST /v1/auth/register, /login, /verify | Redeem an invite; email login code; exchange it for a token |
+| GET /v1/auth/me, CRUD /v1/auth/tokens, POST /v1/auth/invites | Account, own tokens, invite colleagues |
 | GET /v1/nodes/{id}, GET /v1/search | Read |
 | POST /v1/nodes, PATCH /v1/nodes/{id} | Create, update |
 | POST /v1/nodes/{id}:archive, :move | Lifecycle |
@@ -336,16 +351,28 @@ GET /v1/ontology is public (version and card only) so clients can detect drift b
 
 Conventions: an Idempotency-Key header on writes; every response includes ontology\_version; errors use the core shape.
 
-Auth: bearer tokens, stored hashed, each bound to an Actor and per-project roles. Roles:
+Auth: bearer tokens (`fwg_<id>_<secret>`, stored as SHA-256), with an expiry, a last-used time and a revocation time. There are three kinds:
+
+- **user:** issued at registration or login (90 days), bound to one user and one tenant. Agents use user tokens marked as agent.
+- **ingest:** may only call POST /v1/hub/observations, for its tenant (365 days).
+- **operator:** an explicit role map, issued from the server shell (`florque-service token issue`).
+
+Registration is invite-only. An operator (`florque-service invite create`) or a tenant member (`fwg invite`) creates a one-time invite code, valid 14 days and bound to an email address, and it is sent through Resend. `fwg register` redeems it: it creates the user and either a new tenant or membership of the inviting tenant. On a new machine, `fwg login` emails a 6-digit code (valid 10 minutes, 5 attempts) and `/v1/auth/verify` exchanges it for a token. Login gives the same answer whether or not the address is registered. Production refuses to start without RESEND\_API\_KEY and FLORQUE\_EMAIL\_FROM.
+
+Guards: request bodies up to 1 MiB; per-token (or per-IP) rate limits, stricter per IP on /v1/auth; 429 with Retry-After. Every response carries an X-Florque-Min-Client header, and older clients print an upgrade warning.
+
+Roles:
 
 - **admin:** manage members and structure, accept proposals.
-- **contributor:** create and edit; agent writes start as proposed.
+- **contributor:** create and edit.
+
+Agents (tokens marked as agent), whatever their role: their writes start as proposed, and only a human admin accepts proposals.
 - **viewer:** read only.
 - **hub:** as in section 6.5.
 
-Tokens are issued and revoked by an admin command. OIDC comes later.
+Closed beta: there is no RBAC yet. A user token is admin of every project in its tenant. OIDC comes later.
 
-Tenancy: single tenant first, with tenant\_id carried everywhere. Isolation relies on project\_id checks plus the integrity query that flags cross-project edges.
+Tenancy: a tenant has many projects. Every node carries the system field tenant\_id: Project and global classes (Actor) take the creator's tenant, and other nodes inherit it from their parent. A tenant principal sees only its own tenant's nodes; other tenants' nodes answer NOT\_FOUND. Edges, moves and merges never cross tenants (SCOPE\_VIOLATION). Duplicate checks for root and global classes are scoped per tenant. The hub keeps registry, inbox, metrics and audit per tenant (SQLite scoped views), and reconciliation runs per tenant. Local mode uses no tenant (the hub's "default").
 
 Operations: structured JSON logs with request and idempotency ids; metrics for latency, validation failures by code, hub lag and expectations by outcome; a scheduler for evaluation, reconciliation and the weekly insight job.
 
@@ -355,7 +382,13 @@ One command whose subcommands mirror the operations: describe, search, get, crea
 
 Two implementations sit behind one client interface: in-process and HTTP. Config precedence: flags, environment, .florque/config.yaml, user config.
 
-Environment: FLORQUE\_MODE (local or remote), FLORQUE\_API\_URL, FLORQUE\_TOKEN, FLORQUE\_PROJECT. Local mode also uses NEO4J\_URI, NEO4J\_USER, NEO4J\_PASSWORD and the hub database path (FLORQUE\_HUB\_DB); FLORQUE\_STORE=file selects a file-backed graph for single-user use without Neo4j. Tokens come from the environment, never from a file in the repository. sync regenerates the card from the server's ontology version.
+Environment: FLORQUE\_MODE (local or remote), FLORQUE\_API\_URL, FLORQUE\_TOKEN, FLORQUE\_PROJECT. Local mode also uses NEO4J\_URI, NEO4J\_USER, NEO4J\_PASSWORD and the hub database path (FLORQUE\_HUB\_DB); FLORQUE\_STORE=file selects a file-backed graph for single-user use without Neo4j. Tokens come from the environment or from the credentials file that `fwg register` and `fwg login` write: `~/.config/florque/credentials.json` (0600, override with FLORQUE\_CREDENTIALS), keyed by server URL. They never come from a file in the repository, and `.florque/config.yaml` cannot set a token. When the credentials file names a default server and no mode is configured, fwg uses remote mode. sync regenerates the card from the server's ontology version for FLORQUE\_PROJECT.
+
+Account and ontology commands: register, login, logout, whoami, invite, projects, token create/list/revoke, and ontology show/list/validate/add/retire.
+
+Project binding: `fwg use <id>` writes `project` (and `api_url`) into the nearest `.florque/config.yaml`. The file is safe to commit, and it is how a repository pins its agents to one project. `fwg status` reports the binding. Enforcement is optional: `fwg token create -p <id>` issues a user token limited to one project. It cannot create projects, mint ingest tokens or invite, and the tokens it creates inherit the limit.
+
+Packaging: florque-client and florque-cli need only httpx, PyYAML and Typer. Local mode needs the `local` extra (`florque-cli[local]`), which adds graph-core, workgraph-domain and signal-hub. import-linter keeps the thin modules free of the engine.
 
 ## 9. Claude Code plugin
 
@@ -366,10 +399,12 @@ plugin/
   .claude-plugin/plugin.json
   skills/graph-memory/SKILL.md      generic protocol
   skills/workgraph/SKILL.md         domain guide; references card.md
-  commands/                         start-project, brief, debrief, ingest, status
-  hooks/hooks.json                  optional
-  bin/fwg
+  commands/                         project, start-project, brief, debrief, ingest, status
+  hooks/hooks.json                  SessionStart: fwg session-context (bound project, or ask to pick)
+.claude-plugin/marketplace.json     at the repository root (marketplace "florque")
 ```
+
+skills/workgraph/SKILL.md is generated by fwg-gen: the domain guide in workgraph-domain plus the card, and `fwg-gen --check` catches drift. fwg itself is installed with `uv tool install florque-cli`, not bundled in the plugin.
 
 Generic protocol (the agent MUST):
 
@@ -383,6 +418,7 @@ Generic protocol (the agent MUST):
 
 Commands:
 
+- **/project [id or name]:** show, pick or switch the folder's project (`fwg use`).
 - **/start-project:** create the root, objectives, KRs with expectations and a first initiative.
 - **/brief \<task>:** run start\_task\_brief.
 - **/debrief \<task>:** capture and analyse a debrief.
@@ -393,7 +429,13 @@ Hooks (optional, off by default): SessionStart injects a short project brief, an
 
 ## 10. Deployment stack
 
-Phase 1 is Neo4j only. The service and hub join the same compose file later.
+Closed beta (`deploy/`): one Hetzner server with Docker Compose.
+
+- **Containers:** Caddy (automatic TLS; hides /metrics; serves the CLI wheels at /dist/), florque-service (one process, non-root), Neo4j (no published ports, heap and page cache from .env) and Litestream, which replicates service, hub and ontologies SQLite to Object Storage.
+- **Backups:** a nightly Neo4j dump, which needs about one minute of downtime on Community.
+- **Releases:** a release tag builds the GHCR image and the wheels; deploy is a manual workflow run over ssh. The runbook is deploy/README.md.
+
+Local development (the original phase 1 layout) is below.
 
 ```yaml
 services:
@@ -438,7 +480,7 @@ Notes:
 | M3 Signal hub | Registry, sensor adapter, evaluator, conformance check | A sensor series flips a KR to succeeded or failed correctly and idempotently |
 | M4 Association | Slack or email lane, thread bindings, inbox | Precision measured on confirmed proposals; no cross-project leaks |
 | M5 Insights and modules | Debrief analysis, recurring issues, impact module | Insights cite evidence and respect the minimum sample |
-| M6 Hosted | Postgres hub store, multi-tenant, OIDC | Tenant isolation tests pass |
+| M6 Hosted | Postgres hub store, multi-tenant, OIDC | Tenant isolation tests pass (multi-tenancy and invite auth landed early for the closed beta) |
 
 ## 13. Open questions
 
@@ -454,3 +496,4 @@ Notes:
 - Recipes are Python functions in workgraph. They call named, parameterized queries registered in graph-core's queries module, so workgraph contains no raw Cypher.
 - Monorepo tooling: a uv workspace, with dependency direction enforced by import-linter in CI.
 - Embeddings are a pluggable search lane, a no-op until the open question on where they live is resolved.
+- (2026-11-09, closed beta) A tenant has many projects. The base ontology can be extended per tenant and per project (4.9). Registration is invite-only, with email through Resend. Everything runs on one server. There is no RBAC yet. Access always goes agent → fwg → service → Neo4j/SQLite.

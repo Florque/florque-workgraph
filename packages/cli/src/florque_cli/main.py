@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import Any
 
 import typer
-from florque_client import Client, Config, client_from_config, load_config
+from florque_client import Client, Config, HttpClient, client_from_config, load_config
+from florque_client.config import (
+    read_credentials,
+    remove_credentials,
+    save_credentials,
+    update_project_config,
+)
 
 app = typer.Typer(
     help="Florque Workgraph CLI. Output is the JSON response envelope.", no_args_is_help=True
@@ -21,6 +27,12 @@ sensor_app = typer.Typer(
     help="Sensors: series codes bound to a project (admin).", no_args_is_help=True
 )
 inbox_app = typer.Typer(help="Observations the hub could not route.", no_args_is_help=True)
+token_app = typer.Typer(help="Your API tokens (remote mode).", no_args_is_help=True)
+ontology_app = typer.Typer(
+    help="Ontology: the base schema plus your tenant/project extensions.", no_args_is_help=True
+)
+app.add_typer(token_app, name="token")
+app.add_typer(ontology_app, name="ontology")
 app.add_typer(hub_app, name="hub")
 hub_app.add_typer(source_app, name="source")
 hub_app.add_typer(sensor_app, name="sensor")
@@ -31,6 +43,7 @@ class State:
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
         self._client: Client | None = None
+        self.account = False
 
     @property
     def client(self) -> Client:
@@ -70,6 +83,12 @@ class State:
         return pid  # type: ignore[return-value]
 
     @property
+    def remote(self) -> HttpClient:
+        """An HTTP client for account commands, whatever the configured mode."""
+        self.account = True
+        return HttpClient(self.cfg.api_url, self.cfg.token)
+
+    @property
     def state_file(self) -> Path:
         return Path(self.cfg.config_dir or ".florque") / "state.json"
 
@@ -79,7 +98,16 @@ def _st(ctx: typer.Context) -> State:
 
 
 def _emit(env: dict[str, Any], st: State | None = None) -> None:
+    warning = env.pop("client_warning", None)
+    error = env.get("error") or {}
+    if st is not None and st.account and error.get("code") == "UNAVAILABLE":
+        error["hint"] = (
+            f"Account commands talk to the service at {st.cfg.api_url}. "
+            "Pass --api-url https://<server> (register/login remember it) or set FLORQUE_API_URL."
+        )
     typer.echo(json.dumps(env, indent=2, default=str))
+    if warning:
+        typer.echo(f"warning: {warning}", err=True)
     if st is not None and env.get("ontology_version"):
         _drift_hint(st, env["ontology_version"])
     raise typer.Exit(0 if env.get("ok") else 1)
@@ -142,10 +170,19 @@ def main(
 
 
 @app.command()
-def describe(ctx: typer.Context) -> None:
-    """Ontology version, classes and the generated card."""
+def describe(
+    ctx: typer.Context, project: str | None = typer.Option(None, "--project", "-p")
+) -> None:
+    """Ontology version, classes and the generated card (with the project's extensions)."""
     st = _st(ctx)
-    _emit(st.client.describe(), st)
+    _emit(st.client.describe(project or st.cfg.project), st)
+
+
+@app.command()
+def projects(ctx: typer.Context, include_archived: bool = False) -> None:
+    """Projects you can see."""
+    st = _st(ctx)
+    _emit(st.client.projects(include_archived), st)
 
 
 @app.command()
@@ -331,9 +368,9 @@ def brief(ctx: typer.Context, task_id: str) -> None:
 
 @app.command()
 def sync(ctx: typer.Context) -> None:
-    """Regenerate the local card from the server's ontology version."""
+    """Regenerate the local card from the server's ontology version (for FLORQUE_PROJECT)."""
     st = _st(ctx)
-    env = st.client.describe()
+    env = st.client.describe(st.cfg.project)
     if env.get("ok"):
         d = env["data"]
         out_dir = st.state_file.parent
@@ -454,6 +491,349 @@ def inbox_resolve(
 ) -> None:
     st = _st(ctx)
     _emit(st.client.hub_inbox_resolve(id, action, node_id), st)
+
+
+# ---------------------------------------------------------------- accounts
+
+
+def _remember(st: State, env: dict[str, Any]) -> dict[str, Any]:
+    """Store the token from a register/verify answer and hide it from the output."""
+    if not env.get("ok"):
+        return env
+    d = dict(env["data"])
+    path = save_credentials(
+        st.cfg.api_url,
+        {
+            "token": d.pop("token"),
+            "token_id": d.get("token_id"),
+            "email": d.get("user", {}).get("email"),
+            "tenant_id": d.get("tenant", {}).get("id"),
+            "expires_at": d.get("expires_at"),
+        },
+    )
+    d["credentials"] = str(path)
+    d["api_url"] = st.cfg.api_url
+    return {**env, "data": d}
+
+
+@app.command()
+def register(
+    ctx: typer.Context,
+    invite_code: str = typer.Option(..., "--invite", help="Code from the invite email"),
+    email: str = typer.Option(..., help="The address the invite was sent to"),
+    name: str = typer.Option("", help="Your name"),
+    tenant_name: str | None = typer.Option(None, "--tenant-name", help="Workspace name"),
+    label: str | None = typer.Option(None, help="Token label, e.g. laptop"),
+    agent: bool = typer.Option(False, help="Mark the token as an agent's"),
+) -> None:
+    """Redeem an invite. Stores the token in the credentials file (pass --api-url for the server)."""
+    st = _st(ctx)
+    env = st.remote.auth_register(invite_code, email, name, tenant_name, label, agent)
+    _emit(_remember(st, env), st)
+
+
+@app.command()
+def login(
+    ctx: typer.Context,
+    email: str = typer.Option(..., help="Your registered email"),
+    code: str | None = typer.Option(None, help="The emailed code (prompted when omitted)"),
+    tenant_id: str | None = typer.Option(None, "--tenant-id", help="Tenant, if you have several"),
+    label: str | None = typer.Option(None, help="Token label, e.g. laptop"),
+    agent: bool = typer.Option(False, help="Mark the token as an agent's"),
+) -> None:
+    """Log in on this machine with a one-time code sent by email."""
+    st = _st(ctx)
+    client = st.remote
+    if code is None:
+        env = client.auth_login(email)
+        if not env.get("ok"):
+            _emit(env, st)
+        code = typer.prompt(f"Code sent to {email}").strip()
+    _emit(_remember(st, client.auth_verify(email, code, label, tenant_id, agent)), st)
+
+
+@app.command()
+def logout(
+    ctx: typer.Context,
+    keep_token: bool = typer.Option(False, help="Forget locally but leave the token active"),
+) -> None:
+    """Revoke this machine's token and forget it."""
+    st = _st(ctx)
+    entry = read_credentials()["servers"].get(st.cfg.api_url.rstrip("/")) or {}
+    revoked = None
+    if entry.get("token") and entry.get("token_id") and not keep_token:
+        env = HttpClient(st.cfg.api_url, entry["token"]).auth_token_revoke(entry["token_id"])
+        revoked = entry["token_id"] if env.get("ok") else None
+    removed = remove_credentials(st.cfg.api_url)
+    _emit(
+        {"ok": True, "data": {"api_url": st.cfg.api_url, "forgotten": removed, "revoked": revoked}}
+    )
+
+
+@app.command()
+def whoami(ctx: typer.Context) -> None:
+    """The user, tenant and token behind this machine's credentials."""
+    st = _st(ctx)
+    _emit(st.remote.auth_me(), st)
+
+
+@app.command()
+def invite(ctx: typer.Context, email: str) -> None:
+    """Invite a colleague into your tenant (they get an email with a code)."""
+    st = _st(ctx)
+    _emit(st.remote.auth_invite(email), st)
+
+
+@token_app.command("create")
+def token_create(
+    ctx: typer.Context,
+    label: str | None = None,
+    kind: str = typer.Option("user", help="user (agents, CI) or ingest (only /hub/observations)"),
+    agent: bool = typer.Option(False, help="Mark a user token as an agent's"),
+    days: int | None = typer.Option(None, help="Expiry in days"),
+    project: str | None = typer.Option(
+        None, "--project", "-p", help="Limit the token to one project (server-enforced)"
+    ),
+) -> None:
+    """A new token; shown once. Put it in FLORQUE_TOKEN where it is used."""
+    st = _st(ctx)
+    env = st.remote.auth_token_create(label, kind, agent, days, project)
+    if env.get("ok"):
+        typer.echo("The token is shown once; store it as FLORQUE_TOKEN.", err=True)
+    _emit(env, st)
+
+
+@token_app.command("list")
+def token_list(ctx: typer.Context) -> None:
+    st = _st(ctx)
+    _emit(st.remote.auth_tokens(), st)
+
+
+@token_app.command("revoke")
+def token_revoke(ctx: typer.Context, token_id: str) -> None:
+    st = _st(ctx)
+    _emit(st.remote.auth_token_revoke(token_id), st)
+
+
+# ---------------------------------------------------------------- project binding
+
+
+def _fail(
+    code: str, message: str, hint: str, details: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "error": {"code": code, "message": message, "hint": hint, "details": details or {}},
+    }
+
+
+@app.command()
+def use(
+    ctx: typer.Context,
+    project_id: str | None = typer.Argument(None, help="Project id (omit to pick from a list)"),
+    clear: bool = typer.Option(False, "--clear", help="Unbind this folder"),
+) -> None:
+    """Bind this folder (its .florque/config.yaml) to one project; agents here then use it."""
+    st = _st(ctx)
+    if clear:
+        path = update_project_config({}, remove=("project",))
+        _emit({"ok": True, "data": {"project": None, "config": str(path)}})
+    if project_id is None:
+        env = st.client.projects()
+        if not env.get("ok"):
+            _emit(env, st)
+        projects = env["data"]["projects"]
+        if not projects:
+            _emit(
+                _fail("NOT_FOUND", "No projects yet", "Create one: fwg create Project --title ...")
+            )
+        if not sys.stdin.isatty():
+            _emit(
+                _fail(
+                    "ONTOLOGY_VIOLATION",
+                    "No project id given",
+                    "Pass one of the ids: fwg use PROJECT_ID",
+                    {"projects": [{"id": p["id"], "title": p.get("title")} for p in projects]},
+                )
+            )
+        for i, p in enumerate(projects, 1):
+            typer.echo(f"{i:>3}. {p.get('title')}  ({p['id']})", err=True)
+        choice = typer.prompt("Project number", type=int)
+        if not 1 <= choice <= len(projects):
+            raise typer.BadParameter(f"choose 1..{len(projects)}")
+        project_id = projects[choice - 1]["id"]
+    env = st.client.get(project_id, 0)
+    if not env.get("ok"):
+        _emit(env, st)
+    node = env["data"]["node"]
+    if node.get("class") not in (None, "Project") or node.get("parent_id"):
+        _emit(_fail("SCOPE_VIOLATION", f"{project_id} is not a project", "Run fwg projects."))
+    values: dict[str, Any] = {"project": project_id}
+    if st.cfg.mode == "remote":
+        values["api_url"] = st.cfg.api_url
+    path = update_project_config(values)
+    _emit(
+        {
+            "ok": True,
+            "data": {
+                "project": {"id": project_id, "title": node.get("title")},
+                "config": str(path),
+            },
+            "ontology_version": env.get("ontology_version"),
+        },
+        st,
+    )
+
+
+def _status(st: State) -> dict[str, Any]:
+    data: dict[str, Any] = {"mode": st.cfg.mode, "project": None}
+    if st.cfg.mode == "remote":
+        data["api_url"] = st.cfg.api_url
+        me = st.remote.auth_me()
+        if not me.get("ok"):
+            return {**me, "data": data}
+        data["user"] = me["data"]["user"].get("email")
+        data["tenant"] = (me["data"].get("tenant") or {}).get("name")
+        data["token_project"] = me["data"]["token"].get("project_id")
+    if not st.cfg.project:
+        return {
+            **_fail(
+                "NOT_FOUND",
+                "No project bound to this folder",
+                "Pick one with fwg use (fwg projects lists them), or pass -p.",
+            ),
+            "data": data,
+        }
+    env = st.client.get(st.cfg.project, 0)
+    if not env.get("ok"):
+        return {**env, "data": data}
+    node = env["data"]["node"]
+    data["project"] = {"id": node["id"], "title": node.get("title"), "status": node.get("status")}
+    return {"ok": True, "data": data, "ontology_version": env.get("ontology_version")}
+
+
+@app.command()
+def status(ctx: typer.Context) -> None:
+    """Where fwg points: mode, server, user and tenant, and the project bound to this folder."""
+    st = _st(ctx)
+    _emit(_status(st), st)
+
+
+def _lines_overview(ov: dict[str, Any], limit: int = 8) -> list[str]:
+    out: list[str] = []
+    for o in ov.get("objectives", [])[:limit]:
+        out.append(f"- Objective `{o['id']}` {o.get('title')} [{o.get('status')}]")
+        for k in o.get("key_results", [])[:limit]:
+            health = k.get("health") or k.get("outcome") or "n/a"
+            out.append(f"  - KR `{k['id']}` {k.get('title')} [{k.get('status')}, {health}]")
+    for i in ov.get("initiatives", [])[: limit * 2]:
+        out.append(f"- Initiative `{i['id']}` {i.get('title')} [{i.get('status')}]")
+    return out
+
+
+@app.command("session-context", hidden=True)
+def session_context(ctx: typer.Context) -> None:
+    """Markdown for an agent session start (Claude Code SessionStart hook). Never fails."""
+    st = _st(ctx)
+    lines = ["## Florque Workgraph"]
+    connect = (
+        "Ask the user to run `fwg --api-url https://<server> login --email <address>` in a "
+        "terminal. Do not ask for tokens in the chat."
+    )
+    try:
+        st._client = client_from_config(st.cfg)
+    except Exception as e:  # noqa: BLE001 - no login and no local engine/graph
+        typer.echo("\n".join([*lines, f"fwg is not connected ({e}). {connect}"]))
+        return
+    try:
+        env = _status(st)
+        data = env.get("data") or {}
+        err = env.get("error") or {}
+        if err.get("code") in ("UNAUTHENTICATED", "UNAVAILABLE"):
+            lines.append(f"fwg is not connected ({err.get('message')}). {connect}")
+        elif data.get("project"):
+            p = data["project"]
+            lines.append(
+                f"This folder is bound to project **{p['title']}** (`{p['id']}`). "
+                "fwg commands use it by default; do not pass another -p unless the user asks."
+            )
+            if data.get("token_project"):
+                lines.append("The token is limited to this project.")
+            ov = st.client.recipe("project_overview", {"project_id": p["id"]})
+            if ov.get("ok"):
+                lines.extend(_lines_overview(ov["data"]))
+            lines.append("For a task, run `fwg brief <task_id>` before starting.")
+        elif err.get("code") == "NOT_FOUND" and not data.get("project"):
+            env = st.client.projects()
+            projects = env.get("data", {}).get("projects", []) if env.get("ok") else []
+            lines.append(
+                "No project is bound to this folder. Before any graph work, ask the user which "
+                "project to use, then run `fwg use <project_id>` (it writes .florque/config.yaml)."
+            )
+            lines.extend(f"- `{p['id']}` {p.get('title')}" for p in projects[:20])
+            if not projects:
+                lines.append("There are no projects yet; /start-project creates one.")
+        else:
+            lines.append(f"fwg status: {err.get('code')}: {err.get('message')}")
+    except Exception as e:  # noqa: BLE001 - a session start must never break
+        lines.append(f"fwg could not read the workgraph ({e}).")
+    typer.echo("\n".join(lines))
+
+
+# ---------------------------------------------------------------- ontology
+
+
+def _yaml_file(path: str) -> str:
+    return sys.stdin.read() if path == "-" else Path(path).read_text()
+
+
+@ontology_app.command("show")
+def ontology_show(
+    ctx: typer.Context, project: str | None = typer.Option(None, "--project", "-p")
+) -> None:
+    """The effective ontology for a project (base plus active extensions)."""
+    st = _st(ctx)
+    _emit(st.client.describe(project or st.cfg.project), st)
+
+
+@ontology_app.command("list")
+def ontology_list(
+    ctx: typer.Context,
+    project: str | None = typer.Option(None, "--project", "-p"),
+    include_retired: bool = False,
+) -> None:
+    """Extensions of your tenant (and of a project with --project)."""
+    st = _st(ctx)
+    _emit(st.client.ontology_extensions(project or st.cfg.project, include_retired), st)
+
+
+@ontology_app.command("validate")
+def ontology_validate(
+    ctx: typer.Context,
+    file: str = typer.Argument(..., help='Extension YAML file, or "-" for stdin'),
+    project: str | None = typer.Option(None, "--project", "-p", help="Scope to one project"),
+) -> None:
+    """Check an extension without activating it (compile, contract, dry run)."""
+    st = _st(ctx)
+    _emit(st.client.ontology_validate(_yaml_file(file), project), st)
+
+
+@ontology_app.command("add")
+def ontology_add(
+    ctx: typer.Context,
+    file: str = typer.Argument(..., help='Extension YAML file, or "-" for stdin'),
+    project: str | None = typer.Option(None, "--project", "-p", help="Scope to one project"),
+) -> None:
+    """Validate and activate an extension (tenant-wide unless --project)."""
+    st = _st(ctx)
+    _emit(st.client.ontology_add(_yaml_file(file), project), st)
+
+
+@ontology_app.command("retire")
+def ontology_retire(ctx: typer.Context, id: str) -> None:
+    """Deactivate an extension (refused while nodes still use its classes)."""
+    st = _st(ctx)
+    _emit(st.client.ontology_retire(id), st)
 
 
 if __name__ == "__main__":

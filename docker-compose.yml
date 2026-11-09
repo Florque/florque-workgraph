@@ -1,4 +1,5 @@
-# Phase 1 is Neo4j only (spec 10). The service joins under the "service" profile:
+# Local development. Neo4j alone, or with the service under the "service" profile
+# (production: deploy/docker-compose.prod.yml):
 #   docker compose up -d neo4j
 #   docker compose --profile service up -d
 services:
@@ -26,6 +27,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       FLORQUE_HUB_DB: /data/hub.sqlite
       FLORQUE_SERVICE_DB: /data/service.sqlite
+      FLORQUE_ONTOLOGY_DB: /data/ontologies.sqlite
     volumes: [hub_data:/data]
     depends_on:
       neo4j: {condition: service_healthy}

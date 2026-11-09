@@ -1,0 +1,34 @@
+# Continuous replication of the SQLite files to S3-compatible storage (Hetzner Object Storage).
+# Litestream expands ${VARS} from the environment (.env): LITESTREAM_ACCESS_KEY_ID,
+# LITESTREAM_SECRET_ACCESS_KEY, LITESTREAM_BUCKET, LITESTREAM_ENDPOINT, LITESTREAM_REGION.
+dbs:
+  - path: /data/service.sqlite
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: florque/service.sqlite
+        endpoint: ${LITESTREAM_ENDPOINT}
+        region: ${LITESTREAM_REGION}
+        force-path-style: true
+        retention: 168h
+        snapshot-interval: 24h
+  - path: /data/hub.sqlite
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: florque/hub.sqlite
+        endpoint: ${LITESTREAM_ENDPOINT}
+        region: ${LITESTREAM_REGION}
+        force-path-style: true
+        retention: 168h
+        snapshot-interval: 24h
+  - path: /data/ontologies.sqlite
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: florque/ontologies.sqlite
+        endpoint: ${LITESTREAM_ENDPOINT}
+        region: ${LITESTREAM_REGION}
+        force-path-style: true
+        retention: 168h
+        snapshot-interval: 24h

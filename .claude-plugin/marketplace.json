@@ -1,0 +1,12 @@
+{
+  "name": "florque",
+  "owner": { "name": "Florque", "email": "studio@florque.com" },
+  "plugins": [
+    {
+      "name": "florque-workgraph",
+      "source": "./plugin",
+      "description": "Project memory for agents: goals, work, documents and signals through the fwg CLI.",
+      "version": "0.2.0"
+    }
+  ]
+}

@@ -57,6 +57,7 @@ packages = ["florque_graph_core", "florque_workgraph_domain", "florque_signal_hu
 
 [tool.importlinter]
 root_packages = ["florque_graph_core", "florque_workgraph_domain", "florque_signal_hub", "florque_client", "florque_service", "florque_cli"]
+exclude_type_checking_imports = true
 
 [[tool.importlinter.contracts]]
 name = "graph-core imports no other florque package"
@@ -81,3 +82,16 @@ name = "client does not import interfaces"
 type = "forbidden"
 source_modules = ["florque_client"]
 forbidden_modules = ["florque_service", "florque_cli"]
+
+[[tool.importlinter.contracts]]
+name = "thin client modules (HTTP, config) need no engine"
+type = "forbidden"
+source_modules = ["florque_client.base", "florque_client.http", "florque_client.config"]
+forbidden_modules = ["florque_graph_core", "florque_workgraph_domain", "florque_signal_hub"]
+
+[[tool.importlinter.contracts]]
+name = "the CLI imports no engine package directly"
+type = "forbidden"
+source_modules = ["florque_cli"]
+forbidden_modules = ["florque_graph_core", "florque_workgraph_domain", "florque_signal_hub"]
+allow_indirect_imports = true

@@ -30,6 +30,17 @@ class LocalClient(Client):
         return cls(build_app(cfg), local_principal(cfg))
 
     def _call(self, op: str, **args: Any) -> dict[str, Any]:
+        if op.startswith("auth_"):
+            return {
+                "ok": False,
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Accounts exist only on the hosted service",
+                    "hint": "Use --api-url with fwg register / fwg login (remote mode).",
+                    "details": {},
+                },
+                "ontology_version": self.app.ontology_version,
+            }
         return self.app.call(self.principal, op, **args)
 
     def close(self) -> None:

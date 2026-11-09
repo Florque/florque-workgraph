@@ -1,0 +1,73 @@
+# One Hetzner server: Caddy (TLS) -> service -> Neo4j, SQLite files on the host, Litestream
+# replicating them to object storage. Run from /srv/florque (see deploy/README.md):
+#   docker compose -f docker-compose.prod.yml up -d
+name: florque
+
+services:
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      FLORQUE_DOMAIN: ${FLORQUE_DOMAIN:?set FLORQUE_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./dist:/srv/dist:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [service]
+
+  service:
+    image: ${FLORQUE_IMAGE:-ghcr.io/florque/florque-workgraph}:${FLORQUE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FLORQUE_ENV: production
+      FLORQUE_MODE: local
+      FLORQUE_STORE: neo4j
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      FLORQUE_HUB_DB: /data/hub.sqlite
+      FLORQUE_SERVICE_DB: /data/service.sqlite
+      FLORQUE_ONTOLOGY_DB: /data/ontologies.sqlite
+      FLORQUE_PUBLIC_URL: https://${FLORQUE_DOMAIN}
+      # only Caddy can reach the service (no published port), so trust its X-Forwarded-For
+      FLORQUE_FORWARDED_ALLOW_IPS: "*"
+    volumes: ["./data:/data"]
+    expose: ["8000"]
+    depends_on:
+      neo4j: { condition: service_healthy }
+
+  neo4j:
+    image: neo4j:5.26.0
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
+      NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP:-2g}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP:-2g}
+      NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE:-2g}
+      NEO4J_server_bolt_listen__address: 0.0.0.0:7687
+      NEO4J_dbms_usage__report_enabled: "false"
+    # no published ports: Bolt and the browser stay inside the Docker network
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:7474 || exit 1"]
+      interval: 10s
+      retries: 20
+
+  litestream:
+    image: litestream/litestream:0.3.13
+    restart: unless-stopped
+    command: ["replicate"]
+    env_file: .env
+    volumes:
+      - ./litestream.yml:/etc/litestream.yml:ro
+      - ./data:/data
+    depends_on: [service]
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

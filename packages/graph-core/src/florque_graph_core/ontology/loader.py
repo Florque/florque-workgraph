@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+from linkml_runtime.linkml_model.meta import SchemaDefinition
+from linkml_runtime.loaders import yaml_loader
 from linkml_runtime.utils.schemaview import SchemaView
 
 from florque_graph_core.ontology import annotations as vocab
@@ -157,13 +162,143 @@ class _Compiler:
         return out
 
 
-def load_ontology(path: str | Path, fragments: Sequence[str | Path] = ()) -> OntologyModel:
+# ---------------------------------------------------------------- extensions
+
+EXTENSION_KEYS = {
+    "id",
+    "name",
+    "title",
+    "description",
+    "version",
+    "prefixes",
+    "default_prefix",
+    "default_range",
+    "imports",
+    "enums",
+    "slots",
+    "classes",
+}
+EXTENSION_IMPORTS = {"linkml:types"}
+MAX_EXTENSION_BYTES = 64 * 1024
+_NAME = re.compile(r"^[a-z][a-z0-9_-]{1,62}$")
+_VERSION = re.compile(r"^[0-9][0-9A-Za-z.\-]{0,30}$")
+
+
+@dataclass(frozen=True)
+class Extension:
+    """A parsed, structurally checked extension (user-supplied YAML)."""
+
+    name: str
+    version: str
+    data: dict[str, Any]
+
+    @property
+    def label(self) -> str:
+        return f"{self.name}@{self.version}"
+
+
+def parse_extension(text: str) -> Extension:
+    """Parse extension YAML without touching the filesystem or network.
+
+    Extensions are additive: new classes, slots and enums, plus new values on enums of the
+    base schema. They cannot change or remove anything the base defines, and may import only
+    ``linkml:types``.
+    """
+    if len(text.encode()) > MAX_EXTENSION_BYTES:
+        raise OntologyLoadError(f"extension is larger than {MAX_EXTENSION_BYTES // 1024} KiB")
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise OntologyLoadError(f"extension is not valid YAML: {e}") from e
+    if not isinstance(data, dict):
+        raise OntologyLoadError("extension must be a YAML mapping")
+    unknown = set(data) - EXTENSION_KEYS
+    if unknown:
+        raise OntologyLoadError(
+            f"extension keys not allowed: {sorted(unknown)}; allowed: {sorted(EXTENSION_KEYS)}"
+        )
+    name, version = str(data.get("name", "")), str(data.get("version", ""))
+    if not _NAME.match(name):
+        raise OntologyLoadError("extension name must be lowercase letters, digits, - or _")
+    if not _VERSION.match(version):
+        raise OntologyLoadError("extension version is required, e.g. 1.0.0")
+    imports = data.get("imports") or []
+    if not isinstance(imports, list) or set(map(str, imports)) - EXTENSION_IMPORTS:
+        raise OntologyLoadError(f"extensions may import only {sorted(EXTENSION_IMPORTS)}")
+    for key in ("enums", "slots", "classes"):
+        if data.get(key) is not None and not isinstance(data[key], dict):
+            raise OntologyLoadError(f"extension {key} must be a mapping")
+    return Extension(name, version, data)
+
+
+def _apply_extension(sv: SchemaView, ext: Extension) -> None:
+    data = ext.data
+    base_classes, base_slots = set(sv.all_classes()), set(sv.all_slots())
+    own_enums = sv.schema.enums  # enums of the base schema itself (not imported contracts)
+    for c in data.get("classes") or {}:
+        if c in base_classes:
+            raise OntologyLoadError(f"extension {ext.name}: class {c} already exists")
+    for sl in data.get("slots") or {}:
+        if sl in base_slots:
+            raise OntologyLoadError(f"extension {ext.name}: slot {sl} already exists")
+    extended: list[str] = []
+    for e, body in (data.get("enums") or {}).items():
+        if e in sv.all_enums():
+            if e not in own_enums:
+                raise OntologyLoadError(
+                    f"extension {ext.name}: enum {e} belongs to a contract and cannot be extended"
+                )
+            new_values = set((body or {}).get("permissible_values") or {})
+            if set((body or {}).keys()) - {"permissible_values"}:
+                raise OntologyLoadError(
+                    f"extension {ext.name}: an existing enum ({e}) only takes permissible_values"
+                )
+            clash = new_values & set(own_enums[e].permissible_values)
+            if clash:
+                raise OntologyLoadError(f"extension {ext.name}: {e} already has {sorted(clash)}")
+            extended.append(e)
+    doc = {
+        "id": data.get("id") or f"https://florque.com/ontology/ext/{ext.name}",
+        "name": ext.name,
+        "version": ext.version,
+        "prefixes": data.get("prefixes") or {"florque": "https://florque.com/ontology/"},
+        "default_prefix": data.get("default_prefix") or "florque",
+        "default_range": data.get("default_range") or "string",
+        "enums": data.get("enums") or {},
+        "slots": data.get("slots") or {},
+        "classes": data.get("classes") or {},
+    }
+    try:
+        frag = yaml_loader.loads(yaml.safe_dump(doc), target_class=SchemaDefinition)
+    except Exception as e:  # noqa: BLE001 - surface LinkML's message to the author
+        raise OntologyLoadError(f"extension {ext.name}: {e}") from e
+    for enum_name in extended:
+        for k, pv in frag.enums[enum_name].permissible_values.items():
+            own_enums[enum_name].permissible_values[k] = pv
+        del frag.enums[enum_name]
+    sv.merge_schema(frag)
+
+
+def load_ontology(
+    path: str | Path,
+    fragments: Sequence[str | Path] = (),
+    extensions: Sequence[str | Extension] = (),
+) -> OntologyModel:
+    """Load the base schema, trusted fragment files and user extensions (YAML text)."""
     path = Path(path)
     if not path.is_file():
         raise OntologyLoadError(f"Ontology not found: {path}")
     sv = SchemaView(str(path))
     for frag in fragments:
         sv.merge_schema(SchemaView(str(frag)).schema)
+    exts = [e if isinstance(e, Extension) else parse_extension(e) for e in extensions]
+    names = [e.name for e in exts]
+    if len(set(names)) != len(names):
+        raise OntologyLoadError(f"extension names must be unique, got {names}")
+    sv.imports_closure()  # resolve the trusted imports before user content is merged
+    for ext in exts:
+        _apply_extension(sv, ext)
+    sv.set_modified()
     sv.imports_closure()  # populates schema_map
     comp = _Compiler(sv)
 
@@ -263,9 +398,12 @@ def load_ontology(path: str | Path, fragments: Sequence[str | Path] = ()) -> Ont
     roots = [c.name for c in classes.values() if c.root]
     if len(roots) != 1:
         raise OntologyLoadError(f"Exactly one class must be annotated root: true, found {roots}")
+    base_version = str(sv.schema.version or "0.0.0")
     model = OntologyModel(
         name=sv.schema.name,
-        version=str(sv.schema.version or "0.0.0"),
+        version="+".join([base_version, *(e.label for e in exts)]),
+        base_version=base_version,
+        extensions=tuple(e.label for e in exts),
         mixins_version=mixins_version,
         classes=classes,
         mixins=mixins,
@@ -279,6 +417,14 @@ def load_ontology(path: str | Path, fragments: Sequence[str | Path] = ()) -> Ont
 
 def _check_references(model: OntologyModel) -> None:
     for c in model.concrete():
+        if not (c.root or c.is_global):
+            placeable = [k.name for k in (c.kinds or {}).values() if not k.allowed_parents]
+            if c.kinds is None and not c.allowed_parents:
+                raise OntologyLoadError(f"{c.name} needs an allowed_parent annotation")
+            if c.kinds is not None and placeable:
+                raise OntologyLoadError(
+                    f"{c.name} kinds {placeable} need an allowed_parent annotation"
+                )
         rules = list(c.allowed_parents)
         for k in (c.kinds or {}).values():
             rules.extend(k.allowed_parents)

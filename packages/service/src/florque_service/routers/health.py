@@ -18,14 +18,12 @@ def healthz() -> dict[str, bool]:
 
 @router.get("/readyz")
 def readyz(st: ServiceState = Depends(state)) -> JSONResponse:
-    db = st.app.core.store.health()
-    ready = bool(db.get("ok"))
-    body = {
-        "ok": ready,
-        "database": db,
-        "ontology_version": st.app.ontology_version,
-        "mixins_version": st.app.hub.contract.mixins_version,
-    }
+    # public endpoint: report readiness only, never store details (paths, sizes)
+    try:
+        ready = bool(st.app.core.store.health().get("ok"))
+    except Exception:  # noqa: BLE001 - an unreachable store means not ready
+        ready = False
+    body = {"ok": ready, "ontology_version": st.app.ontology_version}
     return JSONResponse(body, status_code=200 if ready else 503)
 
 

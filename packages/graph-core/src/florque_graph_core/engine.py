@@ -83,6 +83,7 @@ class GraphCore:
         self.similarity_threshold = similarity_threshold
         self.clock = clock or (lambda: datetime.now(UTC))
         self.checks = build_checks(ontology)
+        self._project_tenants: dict[str, str | None] = {}
         if ensure_schema:
             store.ensure_schema(ontology)
 
@@ -111,8 +112,39 @@ class GraphCore:
     def _spec_of(self, node: Mapping[str, Any]) -> ClassSpec:
         return resolve_class(self.model, node["class"])
 
+    # ------------------------------------------------------------------ tenancy
+
+    @staticmethod
+    def _foreign(principal: Principal, node: Mapping[str, Any]) -> bool:
+        """True when a tenant-scoped principal looks at a node of another tenant."""
+        return principal.tenant_id is not None and node.get("tenant_id") != principal.tenant_id
+
+    def _project_tenant(self, project_id: str) -> str | None:
+        if project_id not in self._project_tenants:
+            node = self.store.read(lambda tx: tx.get_node(project_id))
+            if node is None:
+                return None
+            self._project_tenants[project_id] = node.get("tenant_id")
+        return self._project_tenants[project_id]
+
+    def _visible(self, tx: StoreTx, principal: Principal, node_id: str) -> dict[str, Any]:
+        """A node the principal may know exists; other tenants' nodes read as not found."""
+        node = self._node(tx, node_id)
+        if self._foreign(principal, node):
+            raise GraphError(
+                ErrorCode.NOT_FOUND,
+                f"Node {node_id!r} not found",
+                hint="Search for the node first.",
+            )
+        return node
+
     def _role(self, principal: Principal, project_id: str | None) -> str | None:
         if project_id is not None:
+            if (
+                principal.tenant_id is not None
+                and self._project_tenant(project_id) != principal.tenant_id
+            ):
+                return None
             return principal.role_in(project_id)
         wildcard = principal.roles.get(WILDCARD)
         if wildcard:
@@ -128,9 +160,20 @@ class GraphCore:
         return self._role(principal, project_id)
 
     def _role_for_node(self, principal: Principal, node: Mapping[str, Any]) -> str | None:
-        return self._role(principal, node.get("project_id"))
+        if self._foreign(principal, node):
+            return None
+        pid = node.get("project_id")
+        if pid is None:
+            return self._role(principal, None)
+        return principal.role_in(pid)
 
     def _require_read(self, principal: Principal, node: Mapping[str, Any]) -> str | None:
+        if self._foreign(principal, node):
+            raise GraphError(
+                ErrorCode.NOT_FOUND,
+                f"Node {node.get('id')!r} not found",
+                hint="Search for the node first.",
+            )
         role = self._role_for_node(principal, node)
         if not self.policy.can_read(role):
             raise GraphError(
@@ -147,16 +190,23 @@ class GraphCore:
         parent_id: str | None,
         project_id: str | None,
         title: str,
+        tenant_id: str | None = None,
     ) -> str | None:
         if spec.dedupe_scope == "none":
             return None
-        return dedupe_key(spec.name, kind, self._scope_key(spec, parent_id, project_id), title)
+        return dedupe_key(
+            spec.name, kind, self._scope_key(spec, parent_id, project_id, tenant_id), title
+        )
 
     def _scope_key(
-        self, spec: ClassSpec, parent_id: str | None, project_id: str | None
+        self,
+        spec: ClassSpec,
+        parent_id: str | None,
+        project_id: str | None,
+        tenant_id: str | None = None,
     ) -> str | None:
         if spec.dedupe_scope == "global":
-            return None
+            return tenant_id  # "global" means global within a tenant
         if spec.dedupe_scope == "root":
             return project_id
         return parent_id
@@ -291,6 +341,7 @@ class GraphCore:
         src_project: str | None,
         requests: Sequence[EdgeRequest],
         principal: Principal,
+        src_tenant: str | None = None,
     ) -> list[tuple[EdgeSpec, dict[str, Any], dict[str, Any]]]:
         resolved: list[tuple[EdgeSpec, dict[str, Any], dict[str, Any]]] = []
         counts: dict[str, int] = {}
@@ -309,7 +360,13 @@ class GraphCore:
                     hint=f"Edges of {spec.name}: {', '.join(e for e in spec.edges if e != 'part_of')}",
                 )
             es = spec.edges[slot]
-            target = self._node(tx, req.to)
+            target = self._visible(tx, principal, req.to)
+            if target.get("tenant_id") != src_tenant:
+                raise GraphError(
+                    ErrorCode.SCOPE_VIOLATION,
+                    f"{slot} would cross tenants",
+                    hint="Edges stay inside one tenant.",
+                )
             if target.get("class") not in es.targets:
                 raise GraphError(
                     ErrorCode.ONTOLOGY_VIOLATION,
@@ -373,10 +430,13 @@ class GraphCore:
         dk: str | None,
         confirm_new: bool,
         exclude_id: str | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         pid = None if spec.is_global or spec.root else project_id
+        # global and root classes are unique within a tenant
+        scope: dict[str, Any] = {"tenant_id": tenant_id} if pid is None and tenant_id else {}
         if spec.natural_key and all(props.get(f) is not None for f in spec.natural_key):
-            where = {f: props[f] for f in spec.natural_key}
+            where = {**scope, **{f: props[f] for f in spec.natural_key}}
             found = [n for n in tx.find_nodes(spec.name, where, pid) if n["id"] != exclude_id]
             if found:
                 raise GraphError(
@@ -386,7 +446,11 @@ class GraphCore:
                     details={"node": _strip(found[0])},
                 )
         found = (
-            [n for n in tx.find_nodes(spec.name, {"dedupe_key": dk}, pid) if n["id"] != exclude_id]
+            [
+                n
+                for n in tx.find_nodes(spec.name, {**scope, "dedupe_key": dk}, pid)
+                if n["id"] != exclude_id
+            ]
             if dk
             else []
         )
@@ -401,7 +465,7 @@ class GraphCore:
             spec.natural_key and all(props.get(f) is not None for f in spec.natural_key)
         ):
             return
-        kind_filter = {"kind": kind} if kind else None
+        kind_filter = {**scope, **({"kind": kind} if kind else {})} or None
         candidates: list[dict[str, Any]] = []
         for cand in tx.find_nodes(spec.name, kind_filter, pid, limit=1000):
             if cand["id"] == exclude_id:
@@ -439,6 +503,8 @@ class GraphCore:
         return {
             "ontology": self.model.name,
             "ontology_version": self.model.version,
+            "base_version": self.model.base_version or self.model.version,
+            "extensions": list(self.model.extensions),
             "mixins_version": self.model.mixins_version,
             "classes": self.model.summary()["classes"],
             "mixins": self.model.summary()["mixins"],
@@ -554,6 +620,18 @@ class GraphCore:
             return {"nodes": visible}
 
         return self.store.read(run)
+
+    def list_projects(self, principal: Principal, include_archived: bool = False) -> dict[str, Any]:
+        """Projects (root nodes) the principal can read; a tenant principal sees its tenant's only."""
+        where = {"tenant_id": principal.tenant_id} if principal.tenant_id else None
+        nodes = self.store.read(
+            lambda tx: tx.find_nodes(self.model.root_class, where, None, include_archived)
+        )
+        return {
+            "projects": [
+                _strip(n) for n in nodes if self.policy.can_read(self._role_for_node(principal, n))
+            ]
+        }
 
     def list_nodes(
         self,
@@ -709,7 +787,7 @@ class GraphCore:
                     hint="Omit parent_id.",
                 )
         elif parent_id:
-            parent = self._node(tx, parent_id)
+            parent = self._visible(tx, principal, parent_id)
             self._check_parent(spec, kind, parent)
         elif not spec.is_global:
             allowed = " or ".join(f"{c}:{k}" if k else c for c, k in spec.parent_rules(kind))
@@ -726,6 +804,7 @@ class GraphCore:
         else:
             assert parent is not None
             project_id = parent.get("project_id")
+        tenant_id = parent.get("tenant_id") if parent is not None else principal.tenant_id
 
         # 7. permissions and field ownership
         if spec.root:
@@ -756,7 +835,7 @@ class GraphCore:
         check_rules(spec, fields)
 
         # 4/6. edge typing and project isolation
-        resolved = self._check_edges(tx, spec, project_id, requests, principal)
+        resolved = self._check_edges(tx, spec, project_id, requests, principal, tenant_id)
         for req in spec.required_edges(kind):
             if not any(es.slot == req for es, _, _ in resolved):
                 raise GraphError(
@@ -778,12 +857,15 @@ class GraphCore:
                 self.model,
                 tx,
                 project_id,
+                tenant_id,
             )
         )
 
         # 8. duplicates
-        dk = self._dedupe(spec, kind, parent_id, project_id, fields["title"])
-        self._check_duplicates(tx, spec, kind, fields, project_id, parent_id, dk, confirm_new)
+        dk = self._dedupe(spec, kind, parent_id, project_id, fields["title"], tenant_id)
+        self._check_duplicates(
+            tx, spec, kind, fields, project_id, parent_id, dk, confirm_new, tenant_id=tenant_id
+        )
 
         # 9. write
         now = self._now()
@@ -792,6 +874,7 @@ class GraphCore:
             "id": node_id,
             "class": spec.name,
             "project_id": project_id,
+            "tenant_id": tenant_id,
             "created_at": now,
             "updated_at": now,
             "version": 1,
@@ -886,7 +969,7 @@ class GraphCore:
                 )
             if new_status is None:
                 raise GraphError(ErrorCode.ONTOLOGY_VIOLATION, "status cannot be cleared")
-            reason = self.policy.check_transition(role, node, new_status)
+            reason = self.policy.check_transition(role, node, new_status, principal.is_agent)
             if reason:
                 raise GraphError(
                     ErrorCode.FORBIDDEN, reason, hint="Ask a project admin to make this change."
@@ -912,6 +995,7 @@ class GraphCore:
                 self.model,
                 tx,
                 node.get("project_id"),
+                node.get("tenant_id"),
             )
         )
 
@@ -919,7 +1003,12 @@ class GraphCore:
         if "title" in changed:
             parent_id = self._parent_id(tx, node_id)
             dk = self._dedupe(
-                spec, node.get("kind"), parent_id, node.get("project_id"), merged["title"]
+                spec,
+                node.get("kind"),
+                parent_id,
+                node.get("project_id"),
+                merged["title"],
+                node.get("tenant_id"),
             )
             self._check_duplicates(
                 tx,
@@ -931,6 +1020,7 @@ class GraphCore:
                 dk,
                 True,
                 exclude_id=node_id,
+                tenant_id=node.get("tenant_id"),
             )
             sets["dedupe_key"] = dk
         sets["version"] = node.get("version", 0) + 1
@@ -1005,8 +1095,12 @@ class GraphCore:
                 raise GraphError(ErrorCode.FORBIDDEN, f"Role {role!r} may not move nodes")
             if spec.root:
                 raise GraphError(ErrorCode.PARENT_RULE, "The root cannot be moved")
-            parent = self._node(tx, new_parent_id)
+            parent = self._visible(tx, principal, new_parent_id)
             self._check_parent(spec, node.get("kind"), parent)
+            if parent.get("tenant_id") != node.get("tenant_id"):
+                raise GraphError(
+                    ErrorCode.SCOPE_VIOLATION, "Cannot move a node into another tenant"
+                )
             if not spec.is_global and parent.get("project_id") != node.get("project_id"):
                 raise GraphError(
                     ErrorCode.SCOPE_VIOLATION, "Cannot move a node into another project"
@@ -1030,7 +1124,12 @@ class GraphCore:
             }
             if spec.dedupe_scope == "parent" and node.get("dedupe_key"):
                 dk = self._dedupe(
-                    spec, node.get("kind"), new_parent_id, node.get("project_id"), node["title"]
+                    spec,
+                    node.get("kind"),
+                    new_parent_id,
+                    node.get("project_id"),
+                    node["title"],
+                    node.get("tenant_id"),
                 )
                 self._check_duplicates(
                     tx,
@@ -1042,6 +1141,7 @@ class GraphCore:
                     dk,
                     True,
                     exclude_id=node_id,
+                    tenant_id=node.get("tenant_id"),
                 )
                 sets["dedupe_key"] = dk
             tx.update_node(node_id, sets)
@@ -1141,6 +1241,7 @@ class GraphCore:
                 src.get("project_id"),
                 [EdgeRequest(edge, dst_id, dict(props or {}))],
                 principal,
+                src.get("tenant_id"),
             )
             if not es.multivalued:
                 for e in tx.edges(src_id, "out", [es.rel_type]):
@@ -1169,7 +1270,7 @@ class GraphCore:
             es = spec.edges[slot]
             perm_role = role
             if spec.is_global:
-                target = self._node(tx, dst_id)
+                target = self._visible(tx, principal, dst_id)
                 perm_role = self._role(principal, target.get("project_id"))
             if not self.policy.can_link(perm_role, slot):
                 raise GraphError(
@@ -1213,7 +1314,9 @@ class GraphCore:
                     ErrorCode.ONTOLOGY_VIOLATION,
                     "Only nodes of the same class and kind can be merged",
                 )
-            if keep.get("project_id") != drop.get("project_id"):
+            if keep.get("project_id") != drop.get("project_id") or keep.get(
+                "tenant_id"
+            ) != drop.get("tenant_id"):
                 raise GraphError(ErrorCode.SCOPE_VIOLATION, "Cannot merge across projects")
             if "archived" in (keep.get("status"), drop.get("status")):
                 raise GraphError(ErrorCode.ONTOLOGY_VIOLATION, "Cannot merge archived nodes")

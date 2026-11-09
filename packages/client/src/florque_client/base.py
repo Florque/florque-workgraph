@@ -17,8 +17,11 @@ class Client:
         raise NotImplementedError
 
     # graph
-    def describe(self) -> dict[str, Any]:
-        return self._call("describe")
+    def describe(self, project_id: str | None = None) -> dict[str, Any]:
+        return self._call("describe", project_id=project_id)
+
+    def projects(self, include_archived: bool = False) -> dict[str, Any]:
+        return self._call("projects", include_archived=include_archived)
 
     def get(self, node_id: str, depth: int = 1) -> dict[str, Any]:
         return self._call("get", node_id=node_id, depth=depth)
@@ -173,3 +176,84 @@ class Client:
 
     def close(self) -> None:  # pragma: no cover - trivial
         pass
+
+    # ontology extensions
+    def ontology_extensions(
+        self, project_id: str | None = None, include_retired: bool = False
+    ) -> dict[str, Any]:
+        return self._call(
+            "ontology_extensions", project_id=project_id, include_retired=include_retired
+        )
+
+    def ontology_validate(self, yaml: str, project_id: str | None = None) -> dict[str, Any]:
+        return self._call("ontology_validate", yaml=yaml, project_id=project_id)
+
+    def ontology_add(self, yaml: str, project_id: str | None = None) -> dict[str, Any]:
+        return self._call("ontology_add", yaml=yaml, project_id=project_id)
+
+    def ontology_retire(self, id: str) -> dict[str, Any]:
+        return self._call("ontology_retire", id=id)
+
+    # accounts (remote mode only)
+    def auth_register(
+        self,
+        invite_code: str,
+        email: str,
+        name: str,
+        tenant_name: str | None = None,
+        label: str | None = None,
+        agent: bool = False,
+    ) -> dict[str, Any]:
+        return self._call(
+            "auth_register",
+            invite_code=invite_code,
+            email=email,
+            name=name,
+            tenant_name=tenant_name,
+            label=label,
+            agent=agent,
+        )
+
+    def auth_login(self, email: str) -> dict[str, Any]:
+        return self._call("auth_login", email=email)
+
+    def auth_verify(
+        self,
+        email: str,
+        code: str,
+        label: str | None = None,
+        tenant_id: str | None = None,
+        agent: bool = False,
+    ) -> dict[str, Any]:
+        return self._call(
+            "auth_verify", email=email, code=code, label=label, tenant_id=tenant_id, agent=agent
+        )
+
+    def auth_me(self) -> dict[str, Any]:
+        return self._call("auth_me")
+
+    def auth_tokens(self) -> dict[str, Any]:
+        return self._call("auth_tokens")
+
+    def auth_token_create(
+        self,
+        label: str | None = None,
+        kind: str = "user",
+        agent: bool = False,
+        expires_days: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._call(
+            "auth_token_create",
+            label=label,
+            kind=kind,
+            agent=agent,
+            expires_days=expires_days,
+            project_id=project_id,
+        )
+
+    def auth_token_revoke(self, token_id: str) -> dict[str, Any]:
+        return self._call("auth_token_revoke", token_id=token_id)
+
+    def auth_invite(self, email: str) -> dict[str, Any]:
+        return self._call("auth_invite", email=email)

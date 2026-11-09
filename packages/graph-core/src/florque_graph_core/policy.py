@@ -30,7 +30,7 @@ class Policy(Protocol):
     ) -> str: ...
 
     def check_transition(
-        self, role: str | None, node: dict[str, Any], new_status: str
+        self, role: str | None, node: dict[str, Any], new_status: str, is_agent: bool = False
     ) -> str | None:
         """Return a reason string if the status change is not allowed."""
         ...
@@ -62,6 +62,6 @@ class DefaultPolicy:
         return requested or "proposed"
 
     def check_transition(
-        self, role: str | None, node: dict[str, Any], new_status: str
+        self, role: str | None, node: dict[str, Any], new_status: str, is_agent: bool = False
     ) -> str | None:
         return None
